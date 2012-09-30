@@ -23,7 +23,6 @@ typeToString(SQLSMALLINT  type)
 
 Connection::Connection() {
     SQLRETURN  statusCode;
-    SQLHANDLE  hdbc;
     SQLHANDLE  hstmt;
     uint8_t* password = NULL;
     uint8_t* server = (uint8_t*)"olaptest";
@@ -35,12 +34,14 @@ Connection::Connection() {
                 "%s:%d:%s():FIXME:handle status code: %d\n",
                 __FILE__, __LINE__, __FUNCTION__,
                 statusCode);
+
+        // FIXME: consider having a defunct state (and do not return defunct instances from Connect())
         return;
     }
 
     // FIXME: check whether we want to use SQLSetEnvAttr();
 
-    statusCode = SQLAllocHandle(SQL_HANDLE_DBC, environment, &hdbc);
+    statusCode = SQLAllocHandle(SQL_HANDLE_DBC, environment, &connection);
 
     if (!SQL_SUCCEEDED(statusCode)) {
         fprintf(stderr,
@@ -53,7 +54,7 @@ Connection::Connection() {
     // FIXME: check whether we want to use SQLSetConnectAttr();
 
     // FIXME: also implement this with: SQLDriverConnect(hdbc, (SQLHWND)NULL, "DSN=SAMPLE;UID=;PWD=;", NULL, 0, NULL, SQL_DRIVER_NOPROMPT);
-    statusCode = SQLConnect(hdbc, server, SQL_NTS, user, SQL_NTS, password, SQL_NTS);
+    statusCode = SQLConnect(connection, server, SQL_NTS, user, SQL_NTS, password, SQL_NTS);
 
     if (!SQL_SUCCEEDED(statusCode)) {
         fprintf(stderr,
@@ -63,7 +64,7 @@ Connection::Connection() {
         return;
     }
 
-    statusCode = SQLAllocHandle(SQL_HANDLE_STMT, hdbc, &hstmt);
+    statusCode = SQLAllocHandle(SQL_HANDLE_STMT, connection, &hstmt);
     if (!SQL_SUCCEEDED(statusCode)) {
         fprintf(stderr,
                 "%s:%d:%s():FIXME:handle status code: %d\n",
@@ -325,30 +326,28 @@ Connection::Connection() {
                 statusCode);
         return;
     }
-
-    statusCode = SQLDisconnect(hdbc);
-
-    if (!SQL_SUCCEEDED(statusCode)) {
-        fprintf(stderr,
-                "%s:%d:%s():FIXME:handle status code: %d\n",
-                __FILE__, __LINE__, __FUNCTION__,
-                statusCode);
-        return;
-    }
-
-    statusCode = SQLFreeHandle(SQL_HANDLE_DBC, hdbc);
-
-    if (!SQL_SUCCEEDED(statusCode)) {
-        fprintf(stderr,
-                "%s:%d:%s():FIXME:handle status code: %d\n",
-                __FILE__, __LINE__, __FUNCTION__,
-                statusCode);
-        return;
-    }
 }
 
 Connection::~Connection() {
     SQLRETURN  statusCode;
+
+    statusCode = SQLDisconnect(connection);
+
+    if (!SQL_SUCCEEDED(statusCode)) {
+        fprintf(stderr,
+                "%s:%d:%s():FIXME:handle status code: %d\n",
+                __FILE__, __LINE__, __FUNCTION__,
+                statusCode);
+    }
+
+    statusCode = SQLFreeHandle(SQL_HANDLE_DBC, connection);
+
+    if (!SQL_SUCCEEDED(statusCode)) {
+        fprintf(stderr,
+                "%s:%d:%s():FIXME:handle status code: %d\n",
+                __FILE__, __LINE__, __FUNCTION__,
+                statusCode);
+    }
 
     statusCode = SQLFreeHandle(SQL_HANDLE_ENV, environment);
 
