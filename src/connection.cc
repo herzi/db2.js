@@ -23,7 +23,6 @@ typeToString(SQLSMALLINT  type)
 
 Connection::Connection() {
     SQLRETURN  statusCode;
-    SQLHANDLE  hstmt;
     uint8_t* password = NULL;
     uint8_t* server = (uint8_t*)"olaptest";
     uint8_t* user = NULL;
@@ -63,14 +62,23 @@ Connection::Connection() {
                 statusCode);
         return;
     }
+}
 
-    statusCode = SQLAllocHandle(SQL_HANDLE_STMT, connection, &hstmt);
+Handle<Value> Connection::Execute (const Arguments& args) {
+    HandleScope scope;
+
+    Connection* connection = ObjectWrap::Unwrap<Connection>(args.This());
+
+    SQLHANDLE  hstmt;
+    SQLRETURN  statusCode;
+
+    statusCode = SQLAllocHandle(SQL_HANDLE_STMT, connection->connection, &hstmt);
     if (!SQL_SUCCEEDED(statusCode)) {
         fprintf(stderr,
                 "%s:%d:%s():FIXME:handle status code: %d\n",
                 __FILE__, __LINE__, __FUNCTION__,
                 statusCode);
-        return;
+        return scope.Close(Undefined());
     }
 
     // FIXME: optional: SQLSetStmtAttr()
@@ -96,7 +104,7 @@ Connection::Connection() {
                 "%s:%d:%s():FIXME:handle status code: %d\n",
                 __FILE__, __LINE__, __FUNCTION__,
                 statusCode);
-        return;
+        return scope.Close(Undefined());
     }
 
     // FIXME: we should use SQLNumParams() to make sure the developer is passing in the correct mount of parameters
@@ -107,7 +115,7 @@ Connection::Connection() {
                 "%s:%d:%s():FIXME:handle status code: %d\n",
                 __FILE__, __LINE__, __FUNCTION__,
                 statusCode);
-        return;
+        return scope.Close(Undefined());
     }
 
     statusCode = SQLExecute(hstmt);
@@ -120,7 +128,7 @@ Connection::Connection() {
                 "%s:%d:%s():FIXME:handle status code: %d\n",
                 __FILE__, __LINE__, __FUNCTION__,
                 statusCode);
-        return;
+        return scope.Close(Undefined());
     }
 
     do {
@@ -132,7 +140,7 @@ Connection::Connection() {
                 "%s:%d:%s():FIXME:handle status code: %d\n",
                 __FILE__, __LINE__, __FUNCTION__,
                 statusCode);
-        return;
+        return scope.Close(Undefined());
     }
 
     SQLSMALLINT  columns[11];
@@ -141,7 +149,7 @@ Connection::Connection() {
                 "%s:%d:%s():FIXME:increase column count to %u (from %lu)\n",
                 __FILE__, __LINE__, __FUNCTION__,
                 columnCount, sizeof(columns) / sizeof(*columns));
-        return;
+        return scope.Close(Undefined());
     }
 
     SQLSMALLINT column;
@@ -162,7 +170,7 @@ Connection::Connection() {
                     "%s:%d:%s():FIXME:handle status code: %d\n",
                     __FILE__, __LINE__, __FUNCTION__,
                     statusCode);
-            return;
+            return scope.Close(Undefined());
         }
 
         if ((size_t)nameLength >= sizeof(nameBuffer)) {
@@ -170,7 +178,7 @@ Connection::Connection() {
                     "%s:%d:%s():FIXME:name buffer too small: %lu bytes (need at least %u)\n",
                     __FILE__, __LINE__, __FUNCTION__,
                     sizeof(nameBuffer), nameLength + 1);
-            return;
+            return scope.Close(Undefined());
         }
 
         columns[column - 1] = columnType;
@@ -188,7 +196,7 @@ Connection::Connection() {
         fprintf(stderr,
                 "%s:%d:%s():FIXME:implement\n",
                 __FILE__, __LINE__, __FUNCTION__);
-        return;
+        return scope.Close(Undefined());
     } else if (!SQL_SUCCEEDED(statusCode)) {
         if (statusCode == SQL_ERROR) {
             SQLCHAR     stateBuffer[6];
@@ -201,7 +209,7 @@ Connection::Connection() {
                         "%s:%d:%s():FIXME:handle status code: %d\n",
                         __FILE__, __LINE__, __FUNCTION__,
                         statusCode);
-                return;
+                return scope.Close(Undefined());
             }
 
             if ((size_t)length >= sizeof(messageBuffer)) {
@@ -209,7 +217,7 @@ Connection::Connection() {
                         "%s:%d:%s():FIXME:increase buffer size to %u bytes (only have %lu bytes)\n",
                         __FILE__, __LINE__, __FUNCTION__,
                         length, sizeof(messageBuffer));
-                return;
+                return scope.Close(Undefined());
             }
 
             fprintf(stderr,
@@ -222,7 +230,7 @@ Connection::Connection() {
                     __FILE__, __LINE__, __FUNCTION__,
                     statusCode);
         }
-        return;
+        return scope.Close(Undefined());
     } else {
         do {
             printf("{\n");
@@ -247,7 +255,7 @@ Connection::Connection() {
                                         "%s:%d:%s():FIXME:handle status code: %d\n",
                                         __FILE__, __LINE__, __FUNCTION__,
                                         statusCode);
-                                return;
+                                return scope.Close(Undefined());
                             }
 
                             if ((size_t)length >= sizeof(messageBuffer)) {
@@ -255,21 +263,21 @@ Connection::Connection() {
                                         "%s:%d:%s():FIXME:increase buffer size to %u bytes (only have %lu bytes)\n",
                                         __FILE__, __LINE__, __FUNCTION__,
                                         length, sizeof(messageBuffer));
-                                return;
+                                return scope.Close(Undefined());
                             }
 
                             fprintf(stderr,
                                     "%s:%d:%s():got error: %s\n",
                                     __FILE__, __LINE__, __FUNCTION__,
                                     (char const*)messageBuffer);
-                            return;
+                            return scope.Close(Undefined());
                         } else {
                             fprintf(stderr,
                                     "%s:%d:%s():FIXME:handle status code: %d\n",
                                     __FILE__, __LINE__, __FUNCTION__,
                                     statusCode);
                         }
-                        return;
+                        return scope.Close(Undefined());
                     }
 
                     if (length == SQL_NULL_DATA) {
@@ -285,7 +293,7 @@ Connection::Connection() {
                                 "%s:%d:%s():FIXME:handle status code: %d\n",
                                 __FILE__, __LINE__, __FUNCTION__,
                                 statusCode);
-                        return;
+                        return scope.Close(Undefined());
                     }
 
                     if ((size_t)length >= sizeof(stringValue)) {
@@ -293,7 +301,7 @@ Connection::Connection() {
                                 "%s:%d:%s():FIXME:increase buffer size to %u bytes (from %lu bytes)\n",
                                 __FILE__, __LINE__, __FUNCTION__,
                                 length + 1, sizeof(stringValue));
-                        return;
+                        return scope.Close(Undefined());
                     } else if (length == SQL_NULL_DATA) {
                         printf("  NULL%s\n", column == columnCount ? "" : ",");
                     } else {
@@ -324,8 +332,10 @@ Connection::Connection() {
                 "%s:%d:%s():FIXME:handle status code: %d\n",
                 __FILE__, __LINE__, __FUNCTION__,
                 statusCode);
-        return;
+        return scope.Close(Undefined());
     }
+
+    return scope.Close(Undefined());
 }
 
 Connection::~Connection() {
@@ -367,8 +377,8 @@ void Connection::Init() {
   tpl->SetClassName(String::NewSymbol("Connection"));
   tpl->InstanceTemplate()->SetInternalFieldCount(1);
   // Prototype
-  tpl->PrototypeTemplate()->Set(String::NewSymbol("plusOne"),
-      FunctionTemplate::New(PlusOne)->GetFunction());
+  tpl->PrototypeTemplate()->Set(String::NewSymbol("execute"),
+      FunctionTemplate::New(Execute)->GetFunction());
 
   constructor = Persistent<Function>::New(tpl->GetFunction());
 }
@@ -391,13 +401,4 @@ Handle<Value> Connection::Connect(const Arguments& args) {
   Local<Object> instance = constructor->NewInstance(argc, argv);
 
   return scope.Close(instance);
-}
-
-Handle<Value> Connection::PlusOne(const Arguments& args) {
-  HandleScope scope;
-
-  Connection* obj = ObjectWrap::Unwrap<Connection>(args.This());
-  obj->counter_ += 1;
-
-  return scope.Close(Number::New(obj->counter_));
 }
