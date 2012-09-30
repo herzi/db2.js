@@ -1,6 +1,5 @@
 #define BUILDING_NODE_EXTENSION
 #include <node.h>
-#include <sqlcli.h>
 #include "connection.hh"
 
 using namespace v8;
@@ -25,13 +24,12 @@ typeToString(SQLSMALLINT  type)
 Connection::Connection() {
     SQLRETURN  statusCode;
     SQLHANDLE  hdbc;
-    SQLHANDLE  henv;
     SQLHANDLE  hstmt;
     uint8_t* password = NULL;
     uint8_t* server = (uint8_t*)"olaptest";
     uint8_t* user = NULL;
 
-    statusCode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &henv);
+    statusCode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &environment);
     if (!SQL_SUCCEEDED(statusCode)) {
         fprintf(stderr,
                 "%s:%d:%s():FIXME:handle status code: %d\n",
@@ -42,7 +40,7 @@ Connection::Connection() {
 
     // FIXME: check whether we want to use SQLSetEnvAttr();
 
-    statusCode = SQLAllocHandle(SQL_HANDLE_DBC, henv, &hdbc);
+    statusCode = SQLAllocHandle(SQL_HANDLE_DBC, environment, &hdbc);
 
     if (!SQL_SUCCEEDED(statusCode)) {
         fprintf(stderr,
@@ -347,19 +345,20 @@ Connection::Connection() {
                 statusCode);
         return;
     }
+}
 
-    statusCode = SQLFreeHandle(SQL_HANDLE_ENV, henv);
+Connection::~Connection() {
+    SQLRETURN  statusCode;
+
+    statusCode = SQLFreeHandle(SQL_HANDLE_ENV, environment);
 
     if (!SQL_SUCCEEDED(statusCode)) {
         fprintf(stderr,
                 "%s:%d:%s():FIXME:handle status code: %d\n",
                 __FILE__, __LINE__, __FUNCTION__,
                 statusCode);
-        return;
     }
 }
-
-Connection::~Connection() {};
 
 Persistent<Function> Connection::constructor;
 
