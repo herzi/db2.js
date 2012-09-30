@@ -4,7 +4,7 @@
 
 using namespace v8;
 
-Handle<Value> CreateObject(const Arguments& args) {
+Handle<Value> Connect(const Arguments& args) {
   HandleScope scope;
   return scope.Close(MyObject::NewInstance(args));
 }
@@ -12,8 +12,8 @@ Handle<Value> CreateObject(const Arguments& args) {
 void InitAll(Handle<Object> target) {
   MyObject::Init();
 
-  target->Set(String::NewSymbol("createObject"),
-      FunctionTemplate::New(CreateObject)->GetFunction());
+  target->Set(String::NewSymbol("connect"),
+      FunctionTemplate::New(Connect)->GetFunction());
 }
 
 NODE_MODULE(db2, InitAll)
