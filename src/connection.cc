@@ -4,15 +4,15 @@
 
 using namespace v8;
 
-MyObject::MyObject() {};
-MyObject::~MyObject() {};
+Connection::Connection() {};
+Connection::~Connection() {};
 
-Persistent<Function> MyObject::constructor;
+Persistent<Function> Connection::constructor;
 
-void MyObject::Init() {
+void Connection::Init() {
   // Prepare constructor template
   Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
-  tpl->SetClassName(String::NewSymbol("MyObject"));
+  tpl->SetClassName(String::NewSymbol("Connection"));
   tpl->InstanceTemplate()->SetInternalFieldCount(1);
   // Prototype
   tpl->PrototypeTemplate()->Set(String::NewSymbol("plusOne"),
@@ -21,17 +21,17 @@ void MyObject::Init() {
   constructor = Persistent<Function>::New(tpl->GetFunction());
 }
 
-Handle<Value> MyObject::New(const Arguments& args) {
+Handle<Value> Connection::New(const Arguments& args) {
   HandleScope scope;
 
-  MyObject* obj = new MyObject();
+  Connection* obj = new Connection();
   obj->counter_ = args[0]->IsUndefined() ? 0 : args[0]->NumberValue();
   obj->Wrap(args.This());
 
   return args.This();
 }
 
-Handle<Value> MyObject::NewInstance(const Arguments& args) {
+Handle<Value> Connection::NewInstance(const Arguments& args) {
   HandleScope scope;
 
   const unsigned argc = 1;
@@ -41,10 +41,10 @@ Handle<Value> MyObject::NewInstance(const Arguments& args) {
   return scope.Close(instance);
 }
 
-Handle<Value> MyObject::PlusOne(const Arguments& args) {
+Handle<Value> Connection::PlusOne(const Arguments& args) {
   HandleScope scope;
 
-  MyObject* obj = ObjectWrap::Unwrap<MyObject>(args.This());
+  Connection* obj = ObjectWrap::Unwrap<Connection>(args.This());
   obj->counter_ += 1;
 
   return scope.Close(Number::New(obj->counter_));

@@ -6,11 +6,11 @@ using namespace v8;
 
 Handle<Value> Connect(const Arguments& args) {
   HandleScope scope;
-  return scope.Close(MyObject::NewInstance(args));
+  return scope.Close(Connection::NewInstance(args));
 }
 
 void InitAll(Handle<Object> target) {
-  MyObject::Init();
+  Connection::Init();
 
   target->Set(String::NewSymbol("connect"),
       FunctionTemplate::New(Connect)->GetFunction());
