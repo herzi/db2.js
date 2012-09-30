@@ -7,7 +7,7 @@
 class Connection : public node::ObjectWrap {
  public:
   static void Init();
-  static v8::Handle<v8::Value> NewInstance(const v8::Arguments& args);
+  static v8::Handle<v8::Value> Connect(const v8::Arguments& args);
 
  private:
   Connection();

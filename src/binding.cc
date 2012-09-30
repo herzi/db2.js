@@ -6,7 +6,7 @@ using namespace v8;
 
 Handle<Value> Connect(const Arguments& args) {
   HandleScope scope;
-  return scope.Close(Connection::NewInstance(args));
+  return scope.Close(Connection::Connect(args));
 }
 
 void InitAll(Handle<Object> target) {

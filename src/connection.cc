@@ -31,7 +31,7 @@ Handle<Value> Connection::New(const Arguments& args) {
   return args.This();
 }
 
-Handle<Value> Connection::NewInstance(const Arguments& args) {
+Handle<Value> Connection::Connect(const Arguments& args) {
   HandleScope scope;
 
   const unsigned argc = 1;
