@@ -2,7 +2,7 @@
   "targets": [
     {
       "target_name": "db2",
-      "sources": [ "src/binding.cc" ]
+      "sources": [ "src/binding.cc", "src/myobject.cc", "src/myobject.hh" ]
     }
   ]
 }

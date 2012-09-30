@@ -1,15 +1,19 @@
+#define BUILDING_NODE_EXTENSION
 #include <node.h>
-#include <v8.h>
+#include "myobject.hh"
 
 using namespace v8;
 
-Handle<Value> Method(const Arguments& args) {
+Handle<Value> CreateObject(const Arguments& args) {
   HandleScope scope;
-  return scope.Close(String::New("world"));
+  return scope.Close(MyObject::NewInstance(args));
 }
 
-void init(Handle<Object> target) {
-  NODE_SET_METHOD(target, "hello", Method);
+void InitAll(Handle<Object> target) {
+  MyObject::Init();
+
+  target->Set(String::NewSymbol("createObject"),
+      FunctionTemplate::New(CreateObject)->GetFunction());
 }
 
-NODE_MODULE(db2, init);
+NODE_MODULE(db2, InitAll)

@@ -1,4 +1,11 @@
-var assert = require('assert');
-var binding = require('./build/Release/db2');
-assert.equal('world', binding.hello());
-console.log('binding.hello() =', binding.hello());
+var addon = require('./build/Release/db2');
+
+var obj = addon.createObject(10);
+console.log( obj.plusOne() ); // 11
+console.log( obj.plusOne() ); // 12
+console.log( obj.plusOne() ); // 13
+
+var obj2 = addon.createObject(20);
+console.log( obj2.plusOne() ); // 21
+console.log( obj2.plusOne() ); // 22
+console.log( obj2.plusOne() ); // 23
