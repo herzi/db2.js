@@ -1,6 +1,6 @@
 #define BUILDING_NODE_EXTENSION
 #include <node.h>
-#include "myobject.hh"
+#include "connection.hh"
 
 using namespace v8;
 
