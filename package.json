@@ -1,0 +1,23 @@
+{
+  "name": "db2",
+  "version": "0.1.0",
+  "description": "node.js bindings for IBM DB2 Express-C",
+  "main": "db2.js",
+  "devDependencies": {},
+  "scripts": {
+    "test": "node test.js",
+    "install": "node-gyp rebuild"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/herzi/db2.js.git"
+  },
+  "keywords": [
+    "node.js",
+    "database",
+    "db2"
+  ],
+  "author": "https://github.com/herzi",
+  "license": "MPL2",
+  "gypfile": true
+}
