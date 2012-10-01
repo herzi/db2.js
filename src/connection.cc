@@ -283,31 +283,7 @@ Handle<Value> Connection::Execute (const Arguments& args) {
             }
 
             if (statusCode == SQL_ERROR) {
-                SQLCHAR     stateBuffer[6];
-                SQLINTEGER  errorNumber;
-                SQLCHAR  messageBuffer[128];
-                SQLSMALLINT  length = 0;
-                statusCode = SQLGetDiagRec(SQL_HANDLE_STMT, hstmt, 1, stateBuffer, &errorNumber, messageBuffer, sizeof(messageBuffer), &length);
-                if (!SQL_SUCCEEDED(statusCode)) {
-                    fprintf(stderr,
-                            "%s:%d:%s():FIXME:handle status code: %d\n",
-                            __FILE__, __LINE__, __FUNCTION__,
-                            statusCode);
-                    return scope.Close(Undefined());
-                }
-
-                if ((size_t)length >= sizeof(messageBuffer)) {
-                    fprintf(stderr,
-                            "%s:%d:%s():FIXME:increase buffer size to %u bytes (only have %lu bytes)\n",
-                            __FILE__, __LINE__, __FUNCTION__,
-                            length, sizeof(messageBuffer));
-                    return scope.Close(Undefined());
-                }
-
-                fprintf(stderr,
-                        "%s:%d:%s():got error: %s\n",
-                        __FILE__, __LINE__, __FUNCTION__,
-                        (char const*)messageBuffer);
+                ThrowException(getException(SQL_HANDLE_STMT, hstmt, statusCode, "SQLFetch()"));
                 return scope.Close(Undefined());
             } else if (statusCode != SQL_NO_DATA) {
                 fprintf(stderr,
