@@ -21,47 +21,52 @@ typeToString(SQLSMALLINT  type)
     }
 }
 
-static Local<Value> getException (SQLHANDLE  statement,
-                                  SQLRETURN  statusCode)
+static char const* getErrorMessage (SQLSMALLINT  handleType,
+                                    SQLHANDLE    handle,
+                                    SQLSMALLINT  statusCode)
 {
-    SQLINTEGER   errorNumber;
-    SQLCHAR      messageBuffer[256];
-    SQLSMALLINT  length = 0;
-    SQLCHAR      stateBuffer[6];
+    static char buffer[256];
+    size_t      length;
+    SQLCHAR     state[7] = {'\0', '\0', '\0', '\0', '\0', '\0', '\0'};
+    SQLINTEGER  nativeError = 0;
+    SQLSMALLINT written = 0;
 
     switch (statusCode) {
     case SQL_ERROR:
-        statusCode = SQLGetDiagRec(SQL_HANDLE_STMT, statement, 1, stateBuffer, &errorNumber, messageBuffer, sizeof(messageBuffer), &length);
-        if (!SQL_SUCCEEDED(statusCode)) {
-            fprintf(stderr,
-                    "%s:%d:%s():FIXME:handle status code: %d\n",
-                    __FILE__, __LINE__, __FUNCTION__,
-                    statusCode);
-            return Exception::Error(String::New("error getting diagnostics"));
+        statusCode = SQLGetDiagRec(handleType, handle, 1, state, &nativeError, (SQLCHAR*)buffer, sizeof(buffer), &written);
+        if (SQL_SUCCEEDED(statusCode)) {
+            if ((size_t)written >= sizeof(buffer)) {
+		fprintf(stderr,
+			"%s:%d:%s():FIXME:increase buffer size to %lu+1 (from %lu)\n",
+			__FILE__, __LINE__, __FUNCTION__,
+			(size_t)written, sizeof(buffer));
+            }
+	    break;
         }
-
-        if ((size_t)length >= sizeof(messageBuffer)) {
-            fprintf(stderr,
-                    "%s:%d:%s():FIXME:increase buffer size to %u bytes (only have %lu bytes)\n",
-                    __FILE__, __LINE__, __FUNCTION__,
-                    length, sizeof(messageBuffer));
-            messageBuffer[sizeof(messageBuffer) - 1] = '\0';
-        }
-
-        return Exception::Error(String::New((char const*)messageBuffer));
     default:
-        fprintf(stderr,
-                "%s:%d:%s():FIXME:handle status code: %d\n",
-                __FILE__, __LINE__, __FUNCTION__,
-                statusCode);
-        return Exception::Error(String::New("Unknown error"));
+        length = snprintf(buffer, sizeof(buffer), "unhandled status code: %d", statusCode); // always NUL-terminated
+        if (length >= sizeof(buffer)) {
+            fprintf(stderr,
+                    "%s:%d:%s():FIXME:increase buffer size to %lu+1 (from %lu)\n",
+                    __FILE__, __LINE__, __FUNCTION__,
+                    length, sizeof(buffer));
+        }
+        break;
     }
+
+    return buffer;
 }
 
-Connection::Connection() {
+static Local<Value> getException (SQLHANDLE  statement,
+                                  SQLRETURN  statusCode)
+{
+    // FIXME: add more information to the object
+    return Exception::Error(String::New(getErrorMessage(SQL_HANDLE_STMT, statement, statusCode)));
+}
+
+Connection::Connection(char const* server) {
     SQLRETURN  statusCode;
     uint8_t* password = NULL;
-    uint8_t* server = (uint8_t*)"olaptest";
     uint8_t* user = NULL;
 
     statusCode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &environment);
@@ -90,14 +95,14 @@ Connection::Connection() {
     // FIXME: check whether we want to use SQLSetConnectAttr();
 
     // FIXME: also implement this with: SQLDriverConnect(hdbc, (SQLHWND)NULL, "DSN=SAMPLE;UID=;PWD=;", NULL, 0, NULL, SQL_DRIVER_NOPROMPT);
-    statusCode = SQLConnect(connection, server, SQL_NTS, user, SQL_NTS, password, SQL_NTS);
+    statusCode = SQLConnect(connection, (SQLCHAR*)server, SQL_NTS, user, SQL_NTS, password, SQL_NTS);
 
     if (!SQL_SUCCEEDED(statusCode)) {
+        char const* errorMessage = getErrorMessage(SQL_HANDLE_DBC, connection, statusCode);
         fprintf(stderr,
-                "%s:%d:%s():FIXME:handle status code: %d\n",
+                "%s:%d:%s():FIXME:handle status code: %d:%s\n",
                 __FILE__, __LINE__, __FUNCTION__,
-                statusCode);
-        return;
+                statusCode, errorMessage);
     }
 }
 
@@ -437,20 +442,30 @@ void Connection::Init() {
 }
 
 Handle<Value> Connection::New(const Arguments& args) {
-  HandleScope scope;
+    HandleScope scope;
 
-  Connection* obj = new Connection();
-  obj->Wrap(args.This());
+    if (args.Length() < 1) {
+        // FIXME: specify the number given and the number expected
+        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        return scope.Close(Undefined());
+    }
 
-  return args.This();
+    String::Utf8Value server(args[0]->ToString());
+    Connection* obj = new Connection(*server);
+    obj->Wrap(args.This());
+
+    return args.This();
 }
 
 Handle<Value> Connection::Connect(const Arguments& args) {
-  HandleScope scope;
+    HandleScope scope;
 
-  const unsigned argc = 1;
-  Handle<Value> argv[argc] = { args[0] };
-  Local<Object> instance = constructor->NewInstance(argc, argv);
+    Handle<Value> argv[args.Length()];
+    size_t  argc;
+    for (argc = 0; argc < (size_t)args.Length(); argc++) {
+        argv[argc] = args[argc];
+    }
+    Local<Object> instance = constructor->NewInstance(argc, argv);
 
-  return scope.Close(instance);
+    return scope.Close(instance);
 }

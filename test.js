@@ -1,6 +1,6 @@
 var db2 = require('./build/Release/db2');
 
-var connection = db2.connect();
+var connection = db2.connect("olapTest");
 
 connection.execute("SELECT * FROM requests", function () {
     //*
