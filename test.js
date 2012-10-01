@@ -11,6 +11,8 @@ connection.execute("SELECT * FROM requests", function () {
     // */
 });
 //*
+//connection.execute("SELECT * FROM requests FETCH FIRST 10 ROWS ONLY", function (error, result) {if (error) {return console.log(error);} console.log(require('util').inspect(result));});
+
 connection.execute("SELECT httpMethod FROM requests");
 connection.execute("SELECT count(httpMethod) FROM requests GROUP BY httpMethod");
 connection.execute("SELECT httpMethod, count(httpMethod) FROM requests GROUP BY httpMethod");
