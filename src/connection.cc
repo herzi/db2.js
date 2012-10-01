@@ -21,6 +21,43 @@ typeToString(SQLSMALLINT  type)
     }
 }
 
+static Local<Value> getException (SQLHANDLE  statement,
+                                  SQLRETURN  statusCode)
+{
+    SQLINTEGER   errorNumber;
+    SQLCHAR      messageBuffer[256];
+    SQLSMALLINT  length = 0;
+    SQLCHAR      stateBuffer[6];
+
+    switch (statusCode) {
+    case SQL_ERROR:
+        statusCode = SQLGetDiagRec(SQL_HANDLE_STMT, statement, 1, stateBuffer, &errorNumber, messageBuffer, sizeof(messageBuffer), &length);
+        if (!SQL_SUCCEEDED(statusCode)) {
+            fprintf(stderr,
+                    "%s:%d:%s():FIXME:handle status code: %d\n",
+                    __FILE__, __LINE__, __FUNCTION__,
+                    statusCode);
+            return Exception::Error(String::New("error getting diagnostics"));
+        }
+
+        if ((size_t)length >= sizeof(messageBuffer)) {
+            fprintf(stderr,
+                    "%s:%d:%s():FIXME:increase buffer size to %u bytes (only have %lu bytes)\n",
+                    __FILE__, __LINE__, __FUNCTION__,
+                    length, sizeof(messageBuffer));
+            messageBuffer[sizeof(messageBuffer) - 1] = '\0';
+        }
+
+        return Exception::Error(String::New((char const*)messageBuffer));
+    default:
+        fprintf(stderr,
+                "%s:%d:%s():FIXME:handle status code: %d\n",
+                __FILE__, __LINE__, __FUNCTION__,
+                statusCode);
+        return Exception::Error(String::New("Unknown error"));
+    }
+}
+
 Connection::Connection() {
     SQLRETURN  statusCode;
     uint8_t* password = NULL;
@@ -129,10 +166,8 @@ Handle<Value> Connection::Execute (const Arguments& args) {
 
     statusCode = SQLExecute(hstmt);
     if (!SQL_SUCCEEDED(statusCode)) {
-        fprintf(stderr,
-                "%s:%d:%s():FIXME:handle status code: %d\n",
-                __FILE__, __LINE__, __FUNCTION__,
-                statusCode);
+        Local<Value> exception = getException(hstmt, statusCode);
+        ThrowException(exception);
         return scope.Close(Undefined());
     }
 
