@@ -72,6 +72,12 @@ Handle<Value> Connection::Execute (const Arguments& args) {
     SQLHANDLE  hstmt;
     SQLRETURN  statusCode;
 
+    if (args.Length() < 1) {
+        // FIXME: specify the number given and the number expected
+        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        return scope.Close(Undefined());
+    }
+
     statusCode = SQLAllocHandle(SQL_HANDLE_STMT, connection->connection, &hstmt);
     if (!SQL_SUCCEEDED(statusCode)) {
         fprintf(stderr,
@@ -83,22 +89,9 @@ Handle<Value> Connection::Execute (const Arguments& args) {
 
     // FIXME: optional: SQLSetStmtAttr()
 
-    /*
-     * SELECT * FROM requests
-     * SELECT httpMethod FROM requests
-     * SELECT count(httpMethod) FROM requests GROUP BY httpMethod
-     * SELECT httpMethod, count(httpMethod) FROM requests GROUP BY httpMethod
-     * SELECT httpMethod, count(*) FROM requests GROUP BY httpMethod
-     * SELECT httpMethod, count(*) AS count FROM requests GROUP BY GROUPING SETS ((httpMethod, httpURL))
-     * SELECT httpMethod, statusCode, count(*) AS count FROM requests GROUP BY GROUPING SETS ((httpMethod, statusCode))
-     * SELECT httpMethod, statusCode, count(*) AS count FROM requests GROUP BY GROUPING SETS ((httpMethod, statusCode), (httpMethod))
-     * SELECT httpMethod, statusCode, count(*) AS count FROM requests GROUP BY GROUPING SETS ((httpMethod, statusCode), (httpMethod)) ORDER BY httpMethod
-     * SELECT httpMethod, statusCode, count(*) AS count FROM requests GROUP BY GROUPING SETS ((httpMethod, httpURL, statusCode), (httpMethod, httpURL), (httpMethod)) ORDER BY httpMethod
-     * SELECT httpMethod, httpURL, statusCode, count(*) AS count FROM requests GROUP BY GROUPING SETS ((httpMethod, httpURL, statusCode), (httpMethod, httpURL), (httpMethod)) ORDER BY httpMethod
-     * SELECT httpMethod, httpURL, statusCode, sum(bodySize) AS data FROM requests GROUP BY GROUPING SETS ((httpMethod, httpURL, statusCode), (httpMethod, httpURL), (httpMethod)) ORDER BY httpMethod
-     */
-#if 1
-    statusCode = SQLPrepare(hstmt, (SQLCHAR *) "SELECT * FROM requests WHERE httpMethod = ?; SELECT httpMethod FROM requests", SQL_NTS);
+    String::Utf8Value query(args[0]->ToString());
+
+    statusCode = SQLPrepare(hstmt, (SQLCHAR *)*query, SQL_NTS);
     if (!SQL_SUCCEEDED(statusCode)) {
         fprintf(stderr,
                 "%s:%d:%s():FIXME:handle status code: %d\n",
@@ -107,22 +100,34 @@ Handle<Value> Connection::Execute (const Arguments& args) {
         return scope.Close(Undefined());
     }
 
-    // FIXME: we should use SQLNumParams() to make sure the developer is passing in the correct mount of parameters
-    char stringParam[] = "POST";
-    statusCode = SQLBindParameter(hstmt, 1 /* argumentNumber */, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_VARCHAR, 20, 0, stringParam, 20, NULL);
+    SQLSMALLINT  parameterCount = 0;
+    statusCode = SQLNumParams(hstmt, &parameterCount);
     if (!SQL_SUCCEEDED(statusCode)) {
         fprintf(stderr,
                 "%s:%d:%s():FIXME:handle status code: %d\n",
                 __FILE__, __LINE__, __FUNCTION__,
                 statusCode);
         return scope.Close(Undefined());
+    }
+
+    for (SQLSMALLINT parameter = 0; parameter < parameterCount; parameter++) {
+        fprintf(stderr,
+                "%s:%d:%s():FIXME:handle parameter binding\n",
+                __FILE__, __LINE__, __FUNCTION__);
+        return scope.Close(Undefined());
+
+        char stringParam[] = "POST";
+        statusCode = SQLBindParameter(hstmt, 1 /* argumentNumber */, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_VARCHAR, 20, 0, stringParam, 20, NULL);
+        if (!SQL_SUCCEEDED(statusCode)) {
+            fprintf(stderr,
+                    "%s:%d:%s():FIXME:handle status code: %d\n",
+                    __FILE__, __LINE__, __FUNCTION__,
+                    statusCode);
+            return scope.Close(Undefined());
+        }
     }
 
     statusCode = SQLExecute(hstmt);
-#else
-    statusCode = SQLExecDirect(hstmt, (SQLCHAR *) "SELECT * FROM requests WHERE httpMethod = 'POST'; SELECT httpMethod FROM requests", SQL_NTS);
-#endif
-
     if (!SQL_SUCCEEDED(statusCode)) {
         fprintf(stderr,
                 "%s:%d:%s():FIXME:handle status code: %d\n",
@@ -143,7 +148,10 @@ Handle<Value> Connection::Execute (const Arguments& args) {
         return scope.Close(Undefined());
     }
 
-    SQLSMALLINT  columns[11];
+    struct {
+        Local<String>  name;
+        SQLSMALLINT    type;
+    } columns[11];
     if ((size_t)columnCount > sizeof(columns) / sizeof(*columns)) {
         fprintf(stderr,
                 "%s:%d:%s():FIXME:increase column count to %u (from %lu)\n",
@@ -181,13 +189,8 @@ Handle<Value> Connection::Execute (const Arguments& args) {
             return scope.Close(Undefined());
         }
 
-        columns[column - 1] = columnType;
-        printf("Column %d: %s (%s), %d, %d, (%s)\n",
-               column,
-               (char const*)nameBuffer,
-               typeToString(columnType),
-               precision, decimals,
-               nullable == SQL_NULLABLE ? "nullable" : "not nullable");
+        columns[column - 1].type = columnType;
+        columns[column - 1].name = String::New((char const*)nameBuffer);
     }
 
     statusCode = SQLFetch(hstmt);
@@ -233,13 +236,23 @@ Handle<Value> Connection::Execute (const Arguments& args) {
         return scope.Close(Undefined());
     } else {
         do {
-            printf("{\n");
+            if (!args[1]->IsFunction()) {
+	        statusCode = SQLFetch(hstmt);
+
+                continue;
+            }
+            Handle<Object> row = Object::New();
+            Handle<Value> argv[2] = {
+                Local<Value>::New(Null()),
+                row
+            };
             for (column = 1; column <= columnCount; column++) {
                 char         stringValue[128];
                 int          integerValue = 0;
                 SQLLEN       length = 0;
+                Local<Value> value;
 
-                switch (columns[column - 1]) {
+                switch (columns[column - 1].type) {
                 case SQL_INTEGER:
                     statusCode = SQLGetData(hstmt, column, SQL_C_DEFAULT, &integerValue, 0, &length);
 
@@ -281,9 +294,9 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                     }
 
                     if (length == SQL_NULL_DATA) {
-                        printf("  NULL%s\n", column == columnCount ? "" : ",");
+                        value = Local<Value>::New(Null());
                     } else {
-                        printf("  %d%s\n", integerValue, column == columnCount ? "" : ",");
+                        value = Local<Value>::New(NumberObject::New((double)integerValue));
                     }
                     break;
                 case SQL_VARCHAR:
@@ -296,27 +309,30 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                         return scope.Close(Undefined());
                     }
 
-                    if ((size_t)length >= sizeof(stringValue)) {
+		    if (length == SQL_NULL_DATA) {
+                        value = Local<Value>::New(Null());
+                    } else if ((size_t)length >= sizeof(stringValue)) {
                         fprintf(stderr,
-                                "%s:%d:%s():FIXME:increase buffer size to %u bytes (from %lu bytes)\n",
+                                "%s:%d:%s():FIXME:increase buffer size to %u+1 bytes (from %lu bytes)\n",
                                 __FILE__, __LINE__, __FUNCTION__,
-                                length + 1, sizeof(stringValue));
+                                length, sizeof(stringValue));
                         return scope.Close(Undefined());
-                    } else if (length == SQL_NULL_DATA) {
-                        printf("  NULL%s\n", column == columnCount ? "" : ",");
                     } else {
-                        printf("  \"%s\"%s\n", stringValue, column == columnCount ? "" : ",");
+                        value = Local<Value>::New(String::New(stringValue));
                     }
                     break;
                 default:
                     fprintf(stderr,
                             "%s:%d:%s():FIXME:unexpected column type %s\n",
                             __FILE__, __LINE__, __FUNCTION__,
-                            typeToString(columns[column - 1]));
+                            typeToString(columns[column - 1].type));
                     continue;
                 }
+
+                row->Set(columns[column - 1].name, value);
             }
-            printf("}\n");
+
+            Local<Function>::Cast(args[1])->Call(args.This(), sizeof(argv) / sizeof(*argv), argv);
 
             statusCode = SQLFetch(hstmt);
         } while (statusCode != SQL_NO_DATA);
@@ -387,7 +403,6 @@ Handle<Value> Connection::New(const Arguments& args) {
   HandleScope scope;
 
   Connection* obj = new Connection();
-  obj->counter_ = args[0]->IsUndefined() ? 0 : args[0]->NumberValue();
   obj->Wrap(args.This());
 
   return args.This();

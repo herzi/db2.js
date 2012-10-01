@@ -1,6 +1,11 @@
 {
   "targets": [
     {
+      "cflags": [
+        "-Wall",
+        "-g",
+        "-Wextra"
+      ],
       "include_dirs": ["/opt/ibm/db2/V9.7/include"],
       "link_settings": {
         "libraries": [
