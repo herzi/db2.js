@@ -137,41 +137,8 @@ Handle<Value> Connection::Execute (const Arguments& args) {
     }
 
     do {
-    SQLSMALLINT  columnCount = 0;
-    statusCode = SQLNumResultCols(hstmt, &columnCount);
-
-    if (!SQL_SUCCEEDED(statusCode)) {
-        fprintf(stderr,
-                "%s:%d:%s():FIXME:handle status code: %d\n",
-                __FILE__, __LINE__, __FUNCTION__,
-                statusCode);
-        return scope.Close(Undefined());
-    }
-
-    struct {
-        Local<String>  name;
-        SQLSMALLINT    type;
-    } columns[11];
-    if ((size_t)columnCount > sizeof(columns) / sizeof(*columns)) {
-        fprintf(stderr,
-                "%s:%d:%s():FIXME:increase column count to %u (from %lu)\n",
-                __FILE__, __LINE__, __FUNCTION__,
-                columnCount, sizeof(columns) / sizeof(*columns));
-        return scope.Close(Undefined());
-    }
-
-    SQLSMALLINT column;
-    for (column = 1; column <= columnCount; column++) {
-        SQLCHAR nameBuffer[128];
-        SQLSMALLINT  nameLength = 0;
-        SQLSMALLINT  columnType = 0;
-        SQLULEN      precision = 0;
-        SQLSMALLINT  decimals = 0;
-        SQLSMALLINT  nullable = SQL_NULLABLE;
-        statusCode = SQLDescribeCol(hstmt, column,
-                                    nameBuffer, sizeof(nameBuffer),
-                                    &nameLength, &columnType,
-                                    &precision, &decimals, &nullable);
+        SQLSMALLINT  columnCount = 0;
+        statusCode = SQLNumResultCols(hstmt, &columnCount);
 
         if (!SQL_SUCCEEDED(statusCode)) {
             fprintf(stderr,
@@ -181,32 +148,31 @@ Handle<Value> Connection::Execute (const Arguments& args) {
             return scope.Close(Undefined());
         }
 
-        if ((size_t)nameLength >= sizeof(nameBuffer)) {
+        struct {
+            Local<String>  name;
+            SQLSMALLINT    type;
+        } columns[11];
+        if ((size_t)columnCount > sizeof(columns) / sizeof(*columns)) {
             fprintf(stderr,
-                    "%s:%d:%s():FIXME:name buffer too small: %lu bytes (need at least %u)\n",
+                    "%s:%d:%s():FIXME:increase column count to %u (from %lu)\n",
                     __FILE__, __LINE__, __FUNCTION__,
-                    sizeof(nameBuffer), nameLength + 1);
+                    columnCount, sizeof(columns) / sizeof(*columns));
             return scope.Close(Undefined());
         }
 
-        columns[column - 1].type = columnType;
-        columns[column - 1].name = String::New((char const*)nameBuffer);
-    }
+        SQLSMALLINT column;
+        for (column = 1; column <= columnCount; column++) {
+            SQLCHAR nameBuffer[128];
+            SQLSMALLINT  nameLength = 0;
+            SQLSMALLINT  columnType = 0;
+            SQLULEN      precision = 0;
+            SQLSMALLINT  decimals = 0;
+            SQLSMALLINT  nullable = SQL_NULLABLE;
+            statusCode = SQLDescribeCol(hstmt, column,
+                                        nameBuffer, sizeof(nameBuffer),
+                                        &nameLength, &columnType,
+                                        &precision, &decimals, &nullable);
 
-    statusCode = SQLFetch(hstmt);
-
-    if (statusCode == SQL_NO_DATA) {
-        fprintf(stderr,
-                "%s:%d:%s():FIXME:implement\n",
-                __FILE__, __LINE__, __FUNCTION__);
-        return scope.Close(Undefined());
-    } else if (!SQL_SUCCEEDED(statusCode)) {
-        if (statusCode == SQL_ERROR) {
-            SQLCHAR     stateBuffer[6];
-            SQLINTEGER  errorNumber;
-            SQLCHAR  messageBuffer[128];
-            SQLSMALLINT  length = 0;
-            statusCode = SQLGetDiagRec(SQL_HANDLE_STMT, hstmt, 1, stateBuffer, &errorNumber, messageBuffer, sizeof(messageBuffer), &length);
             if (!SQL_SUCCEEDED(statusCode)) {
                 fprintf(stderr,
                         "%s:%d:%s():FIXME:handle status code: %d\n",
@@ -215,128 +181,164 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                 return scope.Close(Undefined());
             }
 
-            if ((size_t)length >= sizeof(messageBuffer)) {
+            if ((size_t)nameLength >= sizeof(nameBuffer)) {
                 fprintf(stderr,
-                        "%s:%d:%s():FIXME:increase buffer size to %u bytes (only have %lu bytes)\n",
+                        "%s:%d:%s():FIXME:name buffer too small: %lu bytes (need at least %u)\n",
                         __FILE__, __LINE__, __FUNCTION__,
-                        length, sizeof(messageBuffer));
+                        sizeof(nameBuffer), nameLength + 1);
                 return scope.Close(Undefined());
             }
 
-            fprintf(stderr,
-                    "%s:%d:%s():got error: %s\n",
-                    __FILE__, __LINE__, __FUNCTION__,
-                    (char const*)messageBuffer);
-        } else {
-            fprintf(stderr,
-                    "%s:%d:%s():FIXME:handle status code: %d\n",
-                    __FILE__, __LINE__, __FUNCTION__,
-                    statusCode);
+            columns[column - 1].type = columnType;
+            columns[column - 1].name = String::New((char const*)nameBuffer);
         }
-        return scope.Close(Undefined());
-    } else {
-        do {
-            if (!args[1]->IsFunction()) {
-	        statusCode = SQLFetch(hstmt);
 
-                continue;
+        statusCode = SQLFetch(hstmt);
+
+        if (statusCode == SQL_NO_DATA) {
+            fprintf(stderr,
+                    "%s:%d:%s():FIXME:implement\n",
+                    __FILE__, __LINE__, __FUNCTION__);
+            return scope.Close(Undefined());
+        } else if (!SQL_SUCCEEDED(statusCode)) {
+            if (statusCode == SQL_ERROR) {
+                SQLCHAR     stateBuffer[6];
+                SQLINTEGER  errorNumber;
+                SQLCHAR  messageBuffer[128];
+                SQLSMALLINT  length = 0;
+                statusCode = SQLGetDiagRec(SQL_HANDLE_STMT, hstmt, 1, stateBuffer, &errorNumber, messageBuffer, sizeof(messageBuffer), &length);
+                if (!SQL_SUCCEEDED(statusCode)) {
+                    fprintf(stderr,
+                            "%s:%d:%s():FIXME:handle status code: %d\n",
+                            __FILE__, __LINE__, __FUNCTION__,
+                            statusCode);
+                    return scope.Close(Undefined());
+                }
+
+                if ((size_t)length >= sizeof(messageBuffer)) {
+                    fprintf(stderr,
+                            "%s:%d:%s():FIXME:increase buffer size to %u bytes (only have %lu bytes)\n",
+                            __FILE__, __LINE__, __FUNCTION__,
+                            length, sizeof(messageBuffer));
+                    return scope.Close(Undefined());
+                }
+
+                fprintf(stderr,
+                        "%s:%d:%s():got error: %s\n",
+                        __FILE__, __LINE__, __FUNCTION__,
+                        (char const*)messageBuffer);
+            } else {
+                fprintf(stderr,
+                        "%s:%d:%s():FIXME:handle status code: %d\n",
+                        __FILE__, __LINE__, __FUNCTION__,
+                        statusCode);
             }
-            Handle<Object> row = Object::New();
-            Handle<Value> argv[2] = {
-                Local<Value>::New(Null()),
-                row
-            };
-            for (column = 1; column <= columnCount; column++) {
-                char         stringValue[128];
-                int          integerValue = 0;
-                SQLLEN       length = 0;
-                Local<Value> value;
+            return scope.Close(Undefined());
+        } else {
+            do {
+                if (!args[1]->IsFunction()) {
+                    statusCode = SQLFetch(hstmt);
 
-                switch (columns[column - 1].type) {
-                case SQL_INTEGER:
-                    statusCode = SQLGetData(hstmt, column, SQL_C_DEFAULT, &integerValue, 0, &length);
+                    continue;
+                }
+                Handle<Object> row = Object::New();
+                Handle<Value> argv[2] = {
+                    Local<Value>::New(Null()),
+                    row
+                };
+                for (column = 1; column <= columnCount; column++) {
+                    char         stringValue[128];
+                    int          integerValue = 0;
+                    SQLLEN       length = 0;
+                    Local<Value> value;
 
-                    if (!SQL_SUCCEEDED(statusCode)) {
-                        if (statusCode == SQL_ERROR) {
-                            SQLCHAR     stateBuffer[6];
-                            SQLINTEGER  errorNumber;
-                            SQLCHAR  messageBuffer[128];
-                            SQLSMALLINT  length = 0;
-                            statusCode = SQLGetDiagRec(SQL_HANDLE_STMT, hstmt, 1, stateBuffer, &errorNumber, messageBuffer, sizeof(messageBuffer), &length);
-                            if (!SQL_SUCCEEDED(statusCode)) {
+                    switch (columns[column - 1].type) {
+                    case SQL_INTEGER:
+                        statusCode = SQLGetData(hstmt, column, SQL_C_DEFAULT, &integerValue, 0, &length);
+
+                        if (!SQL_SUCCEEDED(statusCode)) {
+                            if (statusCode == SQL_ERROR) {
+                                SQLCHAR     stateBuffer[6];
+                                SQLINTEGER  errorNumber;
+                                SQLCHAR  messageBuffer[128];
+                                SQLSMALLINT  length = 0;
+                                statusCode = SQLGetDiagRec(SQL_HANDLE_STMT, hstmt, 1, stateBuffer, &errorNumber, messageBuffer, sizeof(messageBuffer), &length);
+                                if (!SQL_SUCCEEDED(statusCode)) {
+                                    fprintf(stderr,
+                                            "%s:%d:%s():FIXME:handle status code: %d\n",
+                                            __FILE__, __LINE__, __FUNCTION__,
+                                            statusCode);
+                                    return scope.Close(Undefined());
+                                }
+
+                                if ((size_t)length >= sizeof(messageBuffer)) {
+                                    fprintf(stderr,
+                                            "%s:%d:%s():FIXME:increase buffer size to %u bytes (only have %lu bytes)\n",
+                                            __FILE__, __LINE__, __FUNCTION__,
+                                            length, sizeof(messageBuffer));
+                                    return scope.Close(Undefined());
+                                }
+
+                                fprintf(stderr,
+                                        "%s:%d:%s():got error: %s\n",
+                                        __FILE__, __LINE__, __FUNCTION__,
+                                        (char const*)messageBuffer);
+                                return scope.Close(Undefined());
+                            } else {
                                 fprintf(stderr,
                                         "%s:%d:%s():FIXME:handle status code: %d\n",
                                         __FILE__, __LINE__, __FUNCTION__,
                                         statusCode);
-                                return scope.Close(Undefined());
                             }
-
-                            if ((size_t)length >= sizeof(messageBuffer)) {
-                                fprintf(stderr,
-                                        "%s:%d:%s():FIXME:increase buffer size to %u bytes (only have %lu bytes)\n",
-                                        __FILE__, __LINE__, __FUNCTION__,
-                                        length, sizeof(messageBuffer));
-                                return scope.Close(Undefined());
-                            }
-
-                            fprintf(stderr,
-                                    "%s:%d:%s():got error: %s\n",
-                                    __FILE__, __LINE__, __FUNCTION__,
-                                    (char const*)messageBuffer);
                             return scope.Close(Undefined());
+                        }
+
+                        if (length == SQL_NULL_DATA) {
+                            value = Local<Value>::New(Null());
                         } else {
+                            value = Local<Value>::New(NumberObject::New((double)integerValue));
+                        }
+                        break;
+                    case SQL_VARCHAR:
+                        statusCode = SQLGetData(hstmt, column, SQL_C_CHAR, stringValue, sizeof(stringValue), &length);
+                        if (!SQL_SUCCEEDED(statusCode)) {
                             fprintf(stderr,
                                     "%s:%d:%s():FIXME:handle status code: %d\n",
                                     __FILE__, __LINE__, __FUNCTION__,
                                     statusCode);
+                            return scope.Close(Undefined());
                         }
-                        return scope.Close(Undefined());
+
+                        if (length == SQL_NULL_DATA) {
+                            value = Local<Value>::New(Null());
+                        } else if ((size_t)length >= sizeof(stringValue)) {
+                            fprintf(stderr,
+                                    "%s:%d:%s():FIXME:increase buffer size to %u+1 bytes (from %lu bytes)\n",
+                                    __FILE__, __LINE__, __FUNCTION__,
+                                    length, sizeof(stringValue));
+                            return scope.Close(Undefined());
+                        } else {
+                            value = Local<Value>::New(String::New(stringValue));
+                        }
+                        break;
+                    default:
+                        fprintf(stderr,
+                                "%s:%d:%s():FIXME:unexpected column type %s\n",
+                                __FILE__, __LINE__, __FUNCTION__,
+                                typeToString(columns[column - 1].type));
+                        continue;
                     }
 
-                    if (length == SQL_NULL_DATA) {
-                        value = Local<Value>::New(Null());
-                    } else {
-                        value = Local<Value>::New(NumberObject::New((double)integerValue));
-                    }
-                    break;
-                case SQL_VARCHAR:
-                    statusCode = SQLGetData(hstmt, column, SQL_C_CHAR, stringValue, sizeof(stringValue), &length);
-                    if (!SQL_SUCCEEDED(statusCode)) {
-                        fprintf(stderr,
-                                "%s:%d:%s():FIXME:handle status code: %d\n",
-                                __FILE__, __LINE__, __FUNCTION__,
-                                statusCode);
-                        return scope.Close(Undefined());
-                    }
-
-		    if (length == SQL_NULL_DATA) {
-                        value = Local<Value>::New(Null());
-                    } else if ((size_t)length >= sizeof(stringValue)) {
-                        fprintf(stderr,
-                                "%s:%d:%s():FIXME:increase buffer size to %u+1 bytes (from %lu bytes)\n",
-                                __FILE__, __LINE__, __FUNCTION__,
-                                length, sizeof(stringValue));
-                        return scope.Close(Undefined());
-                    } else {
-                        value = Local<Value>::New(String::New(stringValue));
-                    }
-                    break;
-                default:
-                    fprintf(stderr,
-                            "%s:%d:%s():FIXME:unexpected column type %s\n",
-                            __FILE__, __LINE__, __FUNCTION__,
-                            typeToString(columns[column - 1].type));
-                    continue;
+                    row->Set(columns[column - 1].name, value);
                 }
 
-                row->Set(columns[column - 1].name, value);
-            }
+                Local<Function>::Cast(args[1])->Call(args.This(), sizeof(argv) / sizeof(*argv), argv);
 
-            Local<Function>::Cast(args[1])->Call(args.This(), sizeof(argv) / sizeof(*argv), argv);
+                statusCode = SQLFetch(hstmt);
+            } while (statusCode != SQL_NO_DATA);
 
-            statusCode = SQLFetch(hstmt);
-        } while (statusCode != SQL_NO_DATA);
-    }
+            // FIXME: execute with (null, null)
+        }
 
         statusCode = SQLMoreResults(hstmt);
     } while (statusCode != SQL_NO_DATA);
