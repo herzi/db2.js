@@ -274,12 +274,7 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                 statusCode = SQL_NO_DATA;
             }
 
-            if (statusCode == SQL_NO_DATA) {
-                fprintf(stderr,
-                        "%s:%d:%s():FIXME:implement\n",
-                        __FILE__, __LINE__, __FUNCTION__);
-                return scope.Close(Undefined());
-            } else if (statusCode == SQL_ERROR) {
+            if (statusCode == SQL_ERROR) {
                 SQLCHAR     stateBuffer[6];
                 SQLINTEGER  errorNumber;
                 SQLCHAR  messageBuffer[128];
@@ -306,7 +301,7 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                         __FILE__, __LINE__, __FUNCTION__,
                         (char const*)messageBuffer);
                 return scope.Close(Undefined());
-            } else {
+            } else if (statusCode != SQL_NO_DATA) {
                 fprintf(stderr,
                         "%s:%d:%s():FIXME:handle status code: %d\n",
                         __FILE__, __LINE__, __FUNCTION__,
@@ -314,7 +309,9 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                 return scope.Close(Undefined());
             }
         }
-        while (statusCode != SQL_NO_DATA) {
+        
+        /* here we can only have SQL_NO_DATA || SQL_SUCCEEDED() */
+        while (SQL_SUCCEEDED(statusCode)) {
             if (!args[1]->IsFunction()) {
                 statusCode = SQLFetch(hstmt);
 
@@ -416,7 +413,13 @@ Handle<Value> Connection::Execute (const Arguments& args) {
             statusCode = SQLFetch(hstmt);
         }
 
-        // FIXME: execute with (null, null)
+        if (args[1]->IsFunction()) {
+            Local<Value> argv[] = {
+                Local<Value>::New(Null()),
+                Local<Value>::New(Null())
+            };
+            Local<Function>::Cast(args[1])->Call(args.This(), sizeof(argv) / sizeof(*argv), argv);
+        }
 
         statusCode = SQLMoreResults(hstmt);
     } while (statusCode != SQL_NO_DATA);
