@@ -25,3 +25,5 @@ connection.execute("SELECT httpMethod, statusCode, count(*) AS count FROM reques
 connection.execute("SELECT httpMethod, httpURL, statusCode, count(*) AS count FROM requests GROUP BY GROUPING SETS ((httpMethod, httpURL, statusCode), (httpMethod, httpURL), (httpMethod)) ORDER BY httpMethod");
 connection.execute("SELECT httpMethod, httpURL, statusCode, sum(bodySize) AS data FROM requests GROUP BY GROUPING SETS ((httpMethod, httpURL, statusCode), (httpMethod, httpURL), (httpMethod)) ORDER BY httpMethod");
 // */
+
+// vim::set sw=4 et
