@@ -1,4 +1,5 @@
 #define BUILDING_NODE_EXTENSION
+#include <cstdint> // INT32_MAX
 #include <node.h>
 #include "connection.hh"
 
@@ -186,20 +187,26 @@ Handle<Value> Connection::Execute (const Arguments& args) {
         return scope.Close(Undefined());
     }
 
-    for (SQLSMALLINT parameter = 0; parameter < parameterCount; parameter++) {
-        fprintf(stderr,
-                "%s:%d:%s():FIXME:handle parameter binding\n",
-                __FILE__, __LINE__, __FUNCTION__);
-        return scope.Close(Undefined());
-
-        char stringParam[] = "POST";
-        statusCode = SQLBindParameter(hstmt, 1 /* argumentNumber */, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_VARCHAR, 20, 0, stringParam, 20, NULL);
-        if (!SQL_SUCCEEDED(statusCode)) {
-            fprintf(stderr,
-                    "%s:%d:%s():FIXME:handle status code: %d\n",
-                    __FILE__, __LINE__, __FUNCTION__,
-                    statusCode);
+    if (parameterCount) {
+        indexCallback += parameterCount;
+        if ((size_t)args.Length() < indexCallback) {
+            ThrowException(Exception::Error(String::New("FIXME: improve binding argument length exception")));
             return scope.Close(Undefined());
+        }
+
+        for (SQLSMALLINT parameter = 1; parameter <= parameterCount; parameter++) {
+            if (args[parameter]->IsString()) {
+                String::Utf8Value  value(args[parameter]);
+                statusCode = SQLBindParameter(hstmt, parameter, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_VARCHAR, INT32_MAX /* column size */, 0, (char*)*value, value.length(), NULL);
+            } else {
+                ThrowException(Exception::Error(String::New("handle parameter binding")));
+                return scope.Close(Undefined());
+            }
+
+            if (!SQL_SUCCEEDED(statusCode)) {
+                ThrowException(getException(SQL_HANDLE_STMT, hstmt, statusCode, "SQLBindParameter()"));
+                return scope.Close(Undefined());
+            }
         }
     }
 

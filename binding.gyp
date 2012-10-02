@@ -2,6 +2,7 @@
   "targets": [
     {
       "cflags": [
+        "-std=c++0x",
         "-Wall",
         "-g",
         "-Wextra"
