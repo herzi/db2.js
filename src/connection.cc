@@ -21,47 +21,69 @@ typeToString(SQLSMALLINT  type)
     }
 }
 
-static char const* getErrorMessage (SQLSMALLINT  handleType,
-                                    SQLHANDLE    handle,
-                                    SQLSMALLINT  statusCode)
+static Local<Value> getException (SQLSMALLINT handleType,
+                                  SQLHANDLE   handle,
+                                  SQLRETURN const  statusCode,
+                                  char const* function)
 {
-    static char buffer[256];
-    size_t      length;
-    SQLCHAR     state[7] = {'\0', '\0', '\0', '\0', '\0', '\0', '\0'};
-    SQLINTEGER  nativeError = 0;
-    SQLSMALLINT written = 0;
+    HandleScope   scope;
+    char          buffer[256];
+    Local<Value>  exception;
+    size_t        length;
+    Local<Value>  status;
+
+    SQLRETURN     internStatus = 0;
+    SQLCHAR       state[7] = {'\0', '\0', '\0', '\0', '\0', '\0', '\0'};
+    SQLINTEGER    nativeError = 0;
+    SQLSMALLINT   written = 0;
 
     switch (statusCode) {
     case SQL_ERROR:
-        statusCode = SQLGetDiagRec(handleType, handle, 1, state, &nativeError, (SQLCHAR*)buffer, sizeof(buffer), &written);
-        if (SQL_SUCCEEDED(statusCode)) {
-            if ((size_t)written >= sizeof(buffer)) {
-		fprintf(stderr,
-			"%s:%d:%s():FIXME:increase buffer size to %lu+1 (from %lu)\n",
-			__FILE__, __LINE__, __FUNCTION__,
-			(size_t)written, sizeof(buffer));
-            }
-	    break;
+        status = String::New("error");
+        internStatus = SQLGetDiagRec(handleType, handle, 1, state, &nativeError, (SQLCHAR*)buffer, sizeof(buffer), &written);
+        if (!SQL_SUCCEEDED(internStatus)) {
+            fprintf(stderr,
+                    "%s:%d:%s():FIXME:unexpected status code: %d\n",
+                    __FILE__, __LINE__, __FUNCTION__,
+                    internStatus);
         }
+        if ((size_t)written >= sizeof(buffer)) {
+            fprintf(stderr,
+                    "%s:%d:%s():FIXME:increase buffer size to %lu+1 (from %lu)\n",
+                    __FILE__, __LINE__, __FUNCTION__,
+                    (size_t)written, sizeof(buffer));
+        }
+        exception = Exception::Error(String::New(buffer));
+        {
+            Local<Object> exceptionObject = exception->ToObject();
+            exceptionObject->Set(String::New("nativeError"), Number::New(nativeError));
+            exceptionObject->Set(String::New("sqlState"), String::New((char const*)state));
+        }
+        break;
     default:
-        length = snprintf(buffer, sizeof(buffer), "unhandled status code: %d", statusCode); // always NUL-terminated
+        length = snprintf(buffer, sizeof(buffer),
+                          "unknown (%d)", statusCode);
+        status = String::New(buffer);
+        length = snprintf(buffer, sizeof(buffer),
+                          "%s:%d:%s():FIXME:unsupported statusCode: %d",
+                          __FILE__, __LINE__, __FUNCTION__,
+                          statusCode); // always NUL-terminated
         if (length >= sizeof(buffer)) {
             fprintf(stderr,
                     "%s:%d:%s():FIXME:increase buffer size to %lu+1 (from %lu)\n",
                     __FILE__, __LINE__, __FUNCTION__,
                     length, sizeof(buffer));
         }
+        exception = Exception::Error(String::New(buffer));
         break;
     }
 
-    return buffer;
-}
+    Local<Object> o = exception->ToObject();
+    o->Set(String::New("status"), status);
+    o->Set(String::New("statusCode"), Number::New(statusCode));
 
-static Local<Value> getException (SQLHANDLE  statement,
-                                  SQLRETURN  statusCode)
-{
     // FIXME: add more information to the object
-    return Exception::Error(String::New(getErrorMessage(SQL_HANDLE_STMT, statement, statusCode)));
+    return exception;
 }
 
 Connection::Connection(char const* server) {
@@ -98,11 +120,7 @@ Connection::Connection(char const* server) {
     statusCode = SQLConnect(connection, (SQLCHAR*)server, SQL_NTS, user, SQL_NTS, password, SQL_NTS);
 
     if (!SQL_SUCCEEDED(statusCode)) {
-        char const* errorMessage = getErrorMessage(SQL_HANDLE_DBC, connection, statusCode);
-        fprintf(stderr,
-                "%s:%d:%s():FIXME:handle status code: %d:%s\n",
-                __FILE__, __LINE__, __FUNCTION__,
-                statusCode, errorMessage);
+        ThrowException(getException(SQL_HANDLE_DBC, connection, statusCode, "SQLConnect()"));
     }
 }
 
@@ -135,10 +153,7 @@ Handle<Value> Connection::Execute (const Arguments& args) {
 
     statusCode = SQLPrepare(hstmt, (SQLCHAR *)*query, SQL_NTS);
     if (!SQL_SUCCEEDED(statusCode)) {
-        fprintf(stderr,
-                "%s:%d:%s():FIXME:handle status code: %d\n",
-                __FILE__, __LINE__, __FUNCTION__,
-                statusCode);
+        ThrowException(getException(SQL_HANDLE_STMT, hstmt, statusCode, "SQLPrepare()"));
         return scope.Close(Undefined());
     }
 
@@ -171,7 +186,7 @@ Handle<Value> Connection::Execute (const Arguments& args) {
 
     statusCode = SQLExecute(hstmt);
     if (!SQL_SUCCEEDED(statusCode)) {
-        Local<Value> exception = getException(hstmt, statusCode);
+        Local<Value> exception = getException(SQL_HANDLE_STMT, hstmt, statusCode, "SQLExecute()");
         ThrowException(exception);
         return scope.Close(Undefined());
     }
