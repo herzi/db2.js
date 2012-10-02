@@ -144,6 +144,7 @@ Connection::Connection(char const* server) {
 
 Handle<Value> Connection::Execute (const Arguments& args) {
     HandleScope scope;
+    size_t      indexCallback = 1;
 
     Connection* connection = ObjectWrap::Unwrap<Connection>(args.This());
 
@@ -312,7 +313,7 @@ Handle<Value> Connection::Execute (const Arguments& args) {
         
         /* here we can only have SQL_NO_DATA || SQL_SUCCEEDED() */
         while (SQL_SUCCEEDED(statusCode)) {
-            if (!args[1]->IsFunction()) {
+            if (!args[indexCallback]->IsFunction()) {
                 statusCode = SQLFetch(hstmt);
 
                 continue;
@@ -408,17 +409,17 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                 row->Set(columns[column - 1].name, value);
             }
 
-            Local<Function>::Cast(args[1])->Call(args.This(), sizeof(argv) / sizeof(*argv), argv);
+            Local<Function>::Cast(args[indexCallback])->Call(args.This(), sizeof(argv) / sizeof(*argv), argv);
 
             statusCode = SQLFetch(hstmt);
         }
 
-        if (args[1]->IsFunction()) {
+        if (args[indexCallback]->IsFunction()) {
             Local<Value> argv[] = {
                 Local<Value>::New(Null()),
                 Local<Value>::New(Null())
             };
-            Local<Function>::Cast(args[1])->Call(args.This(), sizeof(argv) / sizeof(*argv), argv);
+            Local<Function>::Cast(args[indexCallback])->Call(args.This(), sizeof(argv) / sizeof(*argv), argv);
         }
 
         statusCode = SQLMoreResults(hstmt);
