@@ -1,4 +1,9 @@
-var db2 = require('./build/Release/db2');
+var db2;
+try {
+   db2 = require('db2');
+} catch (exception) {
+   db2 = require('./db2');
+}
 
 var connection = db2.connect("olapTest");
 
