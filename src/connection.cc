@@ -86,6 +86,24 @@ static Local<Value> getException (SQLSMALLINT handleType,
     return exception;
 }
 
+static char const* getSqlState (SQLSMALLINT  handleType,
+                                SQLHANDLE    handle)
+{
+    SQLRETURN  internStatus;
+    static SQLCHAR  state[7];
+
+    bzero(state, sizeof(state));
+    internStatus = SQLGetDiagRec(handleType, handle, 1, state, NULL, NULL, 0, NULL);
+    if (!SQL_SUCCEEDED(internStatus)) {
+        fprintf(stderr,
+                "%s:%d:%s():FIXME:unexpected status code: %d\n",
+                __FILE__, __LINE__, __FUNCTION__,
+                internStatus);
+    }
+
+    return (char const*)state;
+}
+
 Connection::Connection(char const* server) {
     SQLRETURN  statusCode;
     uint8_t* password = NULL;
@@ -250,6 +268,12 @@ Handle<Value> Connection::Execute (const Arguments& args) {
 
         statusCode = SQLFetch(hstmt);
         if (!SQL_SUCCEEDED(statusCode)) {
+            if (statusCode == SQL_ERROR && !strcmp(getSqlState(SQL_HANDLE_STMT, hstmt), "24000")) {
+                // SQLFetch() was called for a non-query statement (e.g. "CREATE"/"DROP"); treat this as "no data"
+                // FIXME: try to avoid calling SQLFetch() in these cases
+                statusCode = SQL_NO_DATA;
+            }
+
             if (statusCode == SQL_NO_DATA) {
                 fprintf(stderr,
                         "%s:%d:%s():FIXME:implement\n",
