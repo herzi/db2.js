@@ -18,6 +18,35 @@ connection.execute("SELECT * FROM requests", function () {
 //*
 //connection.execute("SELECT * FROM requests FETCH FIRST 10 ROWS ONLY", function (error, result) {if (error) {return console.log(error);} console.log(require('util').inspect(result));});
 
+var testCreate = function () {
+    var run = false;
+    try {
+	connection.execute("CREATE TABLE sliff (sloff CLOB)", function (error, row) {
+	    if (error) {
+		throw error;
+	    }
+
+	    if (row) {
+		throw new Error("CREATE TABLE cannot produce a row result");
+	    }
+
+	    run = true;
+	});
+	if (!run) {
+	    throw new Error("the CREATE TABLE callback needs to be run");
+	}
+    } catch (exception) {
+        if (exception.nativeError === -601) { // object already exists
+            connection.execute("DROP TABLE sliff");
+            testCreate();
+        } else {
+	    console.error("%s: %s", exception, JSON.stringify(exception));
+            throw exception;
+        }
+    }
+};
+testCreate();
+
 connection.execute("SELECT httpMethod FROM requests");
 connection.execute("SELECT count(httpMethod) FROM requests GROUP BY httpMethod");
 connection.execute("SELECT httpMethod, count(httpMethod) FROM requests GROUP BY httpMethod");
