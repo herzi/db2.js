@@ -249,14 +249,13 @@ Handle<Value> Connection::Execute (const Arguments& args) {
         }
 
         statusCode = SQLFetch(hstmt);
-
-        if (statusCode == SQL_NO_DATA) {
-            fprintf(stderr,
-                    "%s:%d:%s():FIXME:implement\n",
-                    __FILE__, __LINE__, __FUNCTION__);
-            return scope.Close(Undefined());
-        } else if (!SQL_SUCCEEDED(statusCode)) {
-            if (statusCode == SQL_ERROR) {
+        if (!SQL_SUCCEEDED(statusCode)) {
+            if (statusCode == SQL_NO_DATA) {
+                fprintf(stderr,
+                        "%s:%d:%s():FIXME:implement\n",
+                        __FILE__, __LINE__, __FUNCTION__);
+                return scope.Close(Undefined());
+            } else if (statusCode == SQL_ERROR) {
                 SQLCHAR     stateBuffer[6];
                 SQLINTEGER  errorNumber;
                 SQLCHAR  messageBuffer[128];
