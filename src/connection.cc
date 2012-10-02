@@ -282,13 +282,14 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                         "%s:%d:%s():got error: %s\n",
                         __FILE__, __LINE__, __FUNCTION__,
                         (char const*)messageBuffer);
+                return scope.Close(Undefined());
             } else {
                 fprintf(stderr,
                         "%s:%d:%s():FIXME:handle status code: %d\n",
                         __FILE__, __LINE__, __FUNCTION__,
                         statusCode);
+                return scope.Close(Undefined());
             }
-            return scope.Close(Undefined());
         }
         while (statusCode != SQL_NO_DATA) {
             if (!args[1]->IsFunction()) {
