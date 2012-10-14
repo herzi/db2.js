@@ -518,3 +518,5 @@ Handle<Value> Connection::Connect(const Arguments& args) {
 
     return scope.Close(instance);
 }
+
+/* vim:set sw=4 et: */
