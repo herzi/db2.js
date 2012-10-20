@@ -193,7 +193,10 @@ Handle<Value> Connection::Execute (const Arguments& args) {
         return scope.Close(Undefined());
     }
 
+    void**params = NULL;
     if (parameterCount) {
+        params = (void**)malloc(sizeof(void*) * parameterCount);
+        bzero(params, sizeof(void*) * parameterCount);
         indexCallback += parameterCount;
         if ((size_t)args.Length() < indexCallback) {
             ThrowException(Exception::Error(String::New("FIXME: improve binding argument length exception")));
@@ -203,7 +206,8 @@ Handle<Value> Connection::Execute (const Arguments& args) {
         for (SQLSMALLINT parameter = 1; parameter <= parameterCount; parameter++) {
             if (args[parameter]->IsString()) {
                 String::Utf8Value  value(args[parameter]);
-                statusCode = SQLBindParameter(hstmt, parameter, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_VARCHAR, INT32_MAX /* column size */, 0, (char*)*value, value.length(), NULL);
+                params[parameter - 1] = strdup(*value);
+                statusCode = SQLBindParameter(hstmt, parameter, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_VARCHAR, INT32_MAX /* column size */, 0, (char*)params[parameter - 1], value.length(), NULL);
             } else {
                 ThrowException(Exception::Error(String::New("handle parameter binding")));
                 return scope.Close(Undefined());
@@ -413,6 +417,15 @@ Handle<Value> Connection::Execute (const Arguments& args) {
 
         statusCode = SQLMoreResults(hstmt);
     } while (statusCode != SQL_NO_DATA);
+
+    for (SQLSMALLINT parameter = 0; parameter < parameterCount; parameter += 1) {
+        if (params[parameter]) {
+            free(params[parameter]);
+        }
+    }
+    if (params) {
+        free(params);
+    }
 
     statusCode = SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
 

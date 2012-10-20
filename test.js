@@ -35,6 +35,24 @@ var testCreate = function () {
 	if (!run) {
 	    throw new Error("the CREATE TABLE callback needs to be run");
 	}
+
+        connection.execute("INSERT INTO sliff VALUES (?)", 'sloff', function (error, row) {
+            if (error) {
+                throw error;
+            }
+            if (row) {
+                throw new Error('row must be null');
+            }
+        });
+        connection.execute("SELECT * FROM sliff", function (error, row) {
+            if (error) {
+                throw error;
+            }
+
+            if (row && row.SLOFF.toString() !== 'sloff') {
+                throw new Error('row.SLOFF: ' + JSON.stringify(row.SLOFF.toString()) + ' !== "sloff"');
+            }
+        });
     } catch (exception) {
         if (exception.nativeError === -601) { // object already exists
             connection.execute("DROP TABLE sliff");
@@ -43,6 +61,44 @@ var testCreate = function () {
 	    console.error("%s: %s", exception, JSON.stringify(exception));
             throw exception;
         }
+    }
+};
+//testCreate();
+testCreate = function () {
+    try {
+        connection.execute("CREATE TABLE argumentBinding (cString VARCHAR(255))", function (error, row) {
+            if (error) {
+	        throw error;
+	    }
+
+	    if (row !== null) {
+	        throw new Error("row must be null: " + JSON.stringify(row));
+	    }
+        });
+        // FIXME: write a test case for inserting too long data
+        connection.execute("INSERT INTO argumentBinding VALUES (?)", 'test argument', function (error, row) {
+            if (error) {
+                throw error;
+            }
+            if (row) {
+                throw new Error('row must be null');
+            }
+        });
+        connection.execute("SELECT * FROM argumentBinding", function (error, row) {
+            if (error) {
+                throw error;
+            }
+
+            if (row && row.CSTRING.toString() !== 'test argument') {
+                throw new Error('row.CSTRING: ' + JSON.stringify(row.CSTRING.toString()) + ' !== "sloff"');
+            }
+        });
+    } catch (exception) {
+        if (exception.nativeError === -601) { // object already exists
+            connection.execute("DROP TABLE argumentBinding");
+            return testCreate();
+        }
+        throw exception;
     }
 };
 testCreate();
@@ -60,4 +116,4 @@ connection.execute("SELECT httpMethod, httpURL, statusCode, count(*) AS count FR
 connection.execute("SELECT httpMethod, httpURL, statusCode, sum(bodySize) AS data FROM requests GROUP BY GROUPING SETS ((httpMethod, httpURL, statusCode), (httpMethod, httpURL), (httpMethod)) ORDER BY httpMethod");
 // */
 
-// vim::set sw=4 et
+// vim:set sw=4 et:
