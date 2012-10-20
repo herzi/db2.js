@@ -28,7 +28,8 @@ static Local<Value> getException (SQLSMALLINT handleType,
                                   char const* function)
 {
     HandleScope   scope;
-    char          buffer[256];
+    size_t        allocated = 256;
+    char        * buffer = (char*)malloc(allocated);
     Local<Value>  exception;
     size_t        length;
     Local<Value>  status;
@@ -41,18 +42,21 @@ static Local<Value> getException (SQLSMALLINT handleType,
     switch (statusCode) {
     case SQL_ERROR:
         status = String::New("error");
-        internStatus = SQLGetDiagRec(handleType, handle, 1, state, &nativeError, (SQLCHAR*)buffer, sizeof(buffer), &written);
+        internStatus = SQLGetDiagRec(handleType, handle, 1, state, &nativeError, NULL, 0, &written);
+        allocated = written + 1;
+        buffer = (char*)realloc(buffer, allocated);
+        internStatus = SQLGetDiagRec(handleType, handle, 1, state, &nativeError, (SQLCHAR*)buffer, allocated, &written);
+        if ((size_t)written >= allocated) {
+            fprintf(stderr,
+                    "%s:%d:%s():FIXME:increase buffer size to %lu+1 (from %lu)\n",
+                    __FILE__, __LINE__, __FUNCTION__,
+                    (size_t)written, allocated);
+        }
         if (!SQL_SUCCEEDED(internStatus)) {
             fprintf(stderr,
                     "%s:%d:%s():FIXME:unexpected status code: %d\n",
                     __FILE__, __LINE__, __FUNCTION__,
                     internStatus);
-        }
-        if ((size_t)written >= sizeof(buffer)) {
-            fprintf(stderr,
-                    "%s:%d:%s():FIXME:increase buffer size to %lu+1 (from %lu)\n",
-                    __FILE__, __LINE__, __FUNCTION__,
-                    (size_t)written, sizeof(buffer));
         }
         exception = Exception::Error(String::New(buffer));
         {
@@ -62,22 +66,24 @@ static Local<Value> getException (SQLSMALLINT handleType,
         }
         break;
     default:
-        length = snprintf(buffer, sizeof(buffer),
+        length = snprintf(buffer, allocated,
                           "unknown (%d)", statusCode);
         status = String::New(buffer);
-        length = snprintf(buffer, sizeof(buffer),
+        length = snprintf(buffer, allocated,
                           "%s:%d:%s():FIXME:unsupported statusCode: %d",
                           __FILE__, __LINE__, __FUNCTION__,
                           statusCode); // always NUL-terminated
-        if (length >= sizeof(buffer)) {
+        if (length >= allocated) {
             fprintf(stderr,
                     "%s:%d:%s():FIXME:increase buffer size to %lu+1 (from %lu)\n",
                     __FILE__, __LINE__, __FUNCTION__,
-                    length, sizeof(buffer));
+                    length, allocated);
         }
         exception = Exception::Error(String::New(buffer));
         break;
     }
+
+    free(buffer);
 
     Local<Object> o = exception->ToObject();
     o->Set(String::New("status"), status);
