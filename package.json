@@ -1,6 +1,6 @@
 {
   "name": "db2",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "node.js bindings for IBM DB2 Express-C",
   "main": "db2.js",
   "devDependencies": {},
