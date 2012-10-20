@@ -63,7 +63,8 @@ var testCreate = function () {
         }
     }
 };
-//testCreate();
+testCreate();
+
 testCreate = function () {
     try {
         connection.execute("CREATE TABLE argumentBinding (cString VARCHAR(255))", function (error, row) {

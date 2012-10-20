@@ -1,6 +1,9 @@
 #define BUILDING_NODE_EXTENSION
 #include <cstdint> // INT32_MAX
 #include <node.h>
+#include <sqlcli1.h>
+
+#include "buffer-helper.hh"
 #include "connection.hh"
 
 using namespace v8;
@@ -13,6 +16,11 @@ typeToString(SQLSMALLINT  type)
         return "integer";
     case SQL_VARCHAR:
         return "string";
+    case SQL_ARD_TYPE:
+        fprintf(stderr,
+                "%s:%d:%s():FIXME:improve type information for ARD\n",
+                __FILE__, __LINE__, __FUNCTION__);
+        return "application row descriptor";
     default:
         fprintf(stderr,
                 "%s:%d:%s():FIXME:unsupported type %d\n",
@@ -89,6 +97,7 @@ static Local<Value> getException (SQLSMALLINT handleType,
     o->Set(String::New("status"), status);
     o->Set(String::New("statusCode"), Number::New(statusCode));
 
+    // FIXME: add the status code
     // FIXME: add more information to the object
     return exception;
 }
@@ -222,8 +231,7 @@ Handle<Value> Connection::Execute (const Arguments& args) {
 
     statusCode = SQLExecute(hstmt);
     if (!SQL_SUCCEEDED(statusCode)) {
-        Local<Value> exception = getException(SQL_HANDLE_STMT, hstmt, statusCode, "SQLExecute()");
-        ThrowException(exception);
+        ThrowException(getException(SQL_HANDLE_STMT, hstmt, statusCode, "SQLExecute()"));
         return scope.Close(Undefined());
     }
 
@@ -285,6 +293,7 @@ Handle<Value> Connection::Execute (const Arguments& args) {
         }
 
         statusCode = SQLFetch(hstmt);
+
         if (!SQL_SUCCEEDED(statusCode)) {
             if (statusCode == SQL_ERROR && !strcmp(getSqlState(SQL_HANDLE_STMT, hstmt), "24000")) {
                 // SQLFetch() was called for a non-query statement (e.g. "CREATE"/"DROP"); treat this as "no data"
@@ -292,14 +301,8 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                 statusCode = SQL_NO_DATA;
             }
 
-            if (statusCode == SQL_ERROR) {
+            if (statusCode != SQL_NO_DATA) {
                 ThrowException(getException(SQL_HANDLE_STMT, hstmt, statusCode, "SQLFetch()"));
-                return scope.Close(Undefined());
-            } else if (statusCode != SQL_NO_DATA) {
-                fprintf(stderr,
-                        "%s:%d:%s():FIXME:handle status code: %d\n",
-                        __FILE__, __LINE__, __FUNCTION__,
-                        statusCode);
                 return scope.Close(Undefined());
             }
         }
@@ -321,6 +324,9 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                 int          integerValue = 0;
                 SQLLEN       length = 0;
                 Local<Value> value;
+
+                size_t   allocated;
+                SQLCHAR* data;
 
                 switch (columns[column - 1].type) {
                 case SQL_INTEGER:
@@ -389,6 +395,40 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                         return scope.Close(Undefined());
                     } else {
                         value = Local<Value>::New(String::New(stringValue));
+                    }
+                    break;
+                case SQL_ARD_TYPE:
+                    statusCode = SQLGetData(hstmt, column, SQL_C_BINARY, NULL, 0, &length);
+                    if (!SQL_SUCCEEDED(statusCode)) {
+                        fprintf(stderr,
+                                "%s:%d:%s():FIXME:handle status code: %d\n",
+                                __FILE__, __LINE__, __FUNCTION__,
+                                statusCode);
+                        return scope.Close(Undefined());
+                    } else if (length == SQL_NULL_DATA) {
+                        value = Local<Value>::New(Null());
+                    } else {
+                        allocated = length + 1;
+                        data = (SQLCHAR*)malloc(allocated);
+                        statusCode = SQLGetData(hstmt, column, SQL_C_BINARY, data, allocated, &length);
+                        if (!SQL_SUCCEEDED(statusCode)) {
+                            fprintf(stderr,
+                                    "%s:%d:%s():FIXME:handle status code: %d\n",
+                                    __FILE__, __LINE__, __FUNCTION__,
+                                    statusCode);
+                            return scope.Close(Undefined());
+                        }
+                        if ((size_t)length >= allocated) {
+                            fprintf(stderr,
+                                    "%s:%d:%s():FIXME:still too small?: %lu (looks like we need %u)\n",
+                                    __FILE__, __LINE__, __FUNCTION__,
+                                    allocated, length + 1);
+                            return scope.Close(Undefined());
+                        }
+                        // FIXME: having a chain of reusable buffers would be nicer, I guess
+                        data[allocated - 1] = '\0'; // FIXME: research whether this is neccessary
+                        value = makeBuffer((char*)data, length);
+                        free(data);
                     }
                     break;
                 default:
