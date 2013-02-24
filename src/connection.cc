@@ -543,8 +543,13 @@ Handle<Value> Connection::New(const Arguments& args) {
 
 Handle<Value> Connection::Connect(const Arguments& args) {
     HandleScope scope;
-
-    Handle<Value> argv[args.Length()];
+#ifdef _MSC_VER
+//	Handle<Value>  argv = (Handle<Value>)_alloca(args.Length() * sizeof(Value));
+	Handle<Value> *	argv;
+#else
+   Handle<Value> argv[args.Length()];
+#endif
+	
     size_t  argc;
     for (argc = 0; argc < (size_t)args.Length(); argc++) {
         argv[argc] = args[argc];
