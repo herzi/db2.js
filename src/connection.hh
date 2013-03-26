@@ -7,8 +7,6 @@
 
 // Win requires defining a few MACROS
 #if defined _MSC_VER
-#include <malloc.h> 	// For malloc
-
 #define bzero(b,len) (memset((b), '\0', (len)), (void) 0) 
 #define snprintf	_snprintf
 #endif
