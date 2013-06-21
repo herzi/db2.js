@@ -119,6 +119,43 @@ static char const* getSqlState (SQLSMALLINT  handleType,
 
     return (char const*)state;
 }
+ /*************************************************************************
+	The Following DATE/TIMESTAMP to V8 Date Conversion functions taken from 
+	https://github.com/nearinfinity/node-oracle connection.cpp src file
+    with a few changes to account for odd behavior conv from SQL_DATE_STRUCT.
+	
+	The Other option was to return a V8::STRING. That is what the node-postgres
+	module does. Not a satisfying option to me.
+  *************************************************************************/
+void CallDateMethod(Local<Date> date, const char* methodName, int val) {
+  Handle<Value> args[1];
+  args[0] = Number::New(val);
+  Local<Function>::Cast(date->Get(String::New(methodName)))->Call(date, 1, args);
+}
+
+Local<Date> DB2DateToV8Date(SQL_DATE_STRUCT* d) {
+
+  Local<Date> date = Date::Cast(*Date::New(0.0));
+  CallDateMethod(date, "setSeconds", 0);	//Strange behavior if sec,min,hrs not set
+  CallDateMethod(date, "setMinutes",0);		// even with SQL_DATE_STRUCT
+  CallDateMethod(date, "setHours", 0);
+  CallDateMethod(date, "setDate", d->day);
+  CallDateMethod(date, "setMonth", d->month - 1);
+  CallDateMethod(date, "setFullYear", d->year);
+  return date;
+}
+Local<Date> DB2TimestampToV8Date(SQL_TIMESTAMP_STRUCT* d) {
+  
+  Local<Date> date = Date::Cast(*Date::New(0.0));
+  CallDateMethod(date, "setSeconds", d->second);
+  CallDateMethod(date, "setMinutes",d->minute);
+  CallDateMethod(date, "setHours", d->hour);
+  CallDateMethod(date, "setDate", d->day);
+  CallDateMethod(date, "setMonth", d->month - 1);
+  CallDateMethod(date, "setFullYear", d->year);
+  return date;
+}
+
 
 Connection::Connection(char const* server) {
     SQLRETURN  statusCode;
@@ -250,7 +287,7 @@ Handle<Value> Connection::Execute (const Arguments& args) {
         struct {
             Local<String>  name;
             SQLSMALLINT    type;
-        } columns[11];
+        } columns[256];			// 256 column limit
         if ((size_t)columnCount > sizeof(columns) / sizeof(*columns)) {
             fprintf(stderr,
                     "%s:%d:%s():FIXME:increase column count to %u (from %lu)\n",
@@ -321,14 +358,118 @@ Handle<Value> Connection::Execute (const Arguments& args) {
             };
             for (column = 1; column <= columnCount; column++) {
                 char         stringValue[128];
+				char		 stringTime[8];
                 int          integerValue = 0;
-                SQLLEN       length = 0;
+				double			 dblValue = 0.0;
+				SQL_DATE_STRUCT  date;
+				SQL_TIMESTAMP_STRUCT datetime;
+                SQL_TIME_STRUCT time;
+                SQLINTEGER       length = 0;
                 Local<Value> value;
-
+				SQLINTEGER  lobLoc ;
+				SQLINTEGER *loc_ind = 0;
                 size_t   allocated;
-                SQLCHAR* data;
+                
 
                 switch (columns[column - 1].type) {
+				case SQL_DECIMAL:
+				case SQL_REAL:
+				case SQL_NUMERIC:
+				case SQL_DOUBLE:
+				case SQL_FLOAT:
+					statusCode = SQLGetData(hstmt, column, SQL_C_DOUBLE, &dblValue, 0, &length);
+
+                    if (!SQL_SUCCEEDED(statusCode)) {
+                        if (statusCode == SQL_ERROR) {
+                            SQLCHAR     stateBuffer[6];
+                            SQLINTEGER  errorNumber;
+                            SQLCHAR  messageBuffer[128];
+                            SQLSMALLINT  length = 0;
+                            statusCode = SQLGetDiagRec(SQL_HANDLE_STMT, hstmt, 1, stateBuffer, &errorNumber, messageBuffer, sizeof(messageBuffer), &length);
+                            if (!SQL_SUCCEEDED(statusCode)) {
+                                fprintf(stderr,
+                                        "%s:%d:%s():FIXME:handle status code: %d\n",
+                                        __FILE__, __LINE__, __FUNCTION__,
+                                        statusCode);
+                                return scope.Close(Undefined());
+                            }
+
+                            if ((size_t)length >= sizeof(messageBuffer)) {
+                                fprintf(stderr,
+                                        "%s:%d:%s():FIXME:increase buffer size to %u bytes (only have %lu bytes)\n",
+                                        __FILE__, __LINE__, __FUNCTION__,
+                                        length, sizeof(messageBuffer));
+                                return scope.Close(Undefined());
+                            }
+
+                            fprintf(stderr,
+                                    "%s:%d:%s():got error: %s\n",
+                                    __FILE__, __LINE__, __FUNCTION__,
+                                    (char const*)messageBuffer);
+                            return scope.Close(Undefined());
+                        } else {
+                            fprintf(stderr,
+                                    "%s:%d:%s():FIXME:handle status code: %d\n",
+                                    __FILE__, __LINE__, __FUNCTION__,
+                                    statusCode);
+                        }
+                        return scope.Close(Undefined());
+                    }
+
+                    if (length == SQL_NULL_DATA) {
+                        value = Local<Value>::New(Null());
+                    } else {
+                        value = Local<Value>::New(NumberObject::New((double)dblValue));
+                    }
+                    break;
+				
+				case SQL_DECFLOAT:
+					statusCode = SQLGetData(hstmt, column, SQL_C_DEFAULT, &dblValue, 0, &length);
+
+                    if (!SQL_SUCCEEDED(statusCode)) {
+                        if (statusCode == SQL_ERROR) {
+                            SQLCHAR     stateBuffer[6];
+                            SQLINTEGER  errorNumber;
+                            SQLCHAR  messageBuffer[128];
+                            SQLSMALLINT  length = 0;
+                            statusCode = SQLGetDiagRec(SQL_HANDLE_STMT, hstmt, 1, stateBuffer, &errorNumber, messageBuffer, sizeof(messageBuffer), &length);
+                            if (!SQL_SUCCEEDED(statusCode)) {
+                                fprintf(stderr,
+                                        "%s:%d:%s():FIXME:handle status code: %d\n",
+                                        __FILE__, __LINE__, __FUNCTION__,
+                                        statusCode);
+                                return scope.Close(Undefined());
+                            }
+
+                            if ((size_t)length >= sizeof(messageBuffer)) {
+                                fprintf(stderr,
+                                        "%s:%d:%s():FIXME:increase buffer size to %u bytes (only have %lu bytes)\n",
+                                        __FILE__, __LINE__, __FUNCTION__,
+                                        length, sizeof(messageBuffer));
+                                return scope.Close(Undefined());
+                            }
+
+                            fprintf(stderr,
+                                    "%s:%d:%s():got error: %s\n",
+                                    __FILE__, __LINE__, __FUNCTION__,
+                                    (char const*)messageBuffer);
+                            return scope.Close(Undefined());
+                        } else {
+                            fprintf(stderr,
+                                    "%s:%d:%s():FIXME:handle status code: %d\n",
+                                    __FILE__, __LINE__, __FUNCTION__,
+                                    statusCode);
+                        }
+                        return scope.Close(Undefined());
+                    }
+
+                    if (length == SQL_NULL_DATA) {
+                        value = Local<Value>::New(Null());
+                    } else {
+                        value = Local<Value>::New(NumberObject::New((double)dblValue));
+                    }
+                    break;
+				case SQL_SMALLINT:
                 case SQL_INTEGER:
                     statusCode = SQLGetData(hstmt, column, SQL_C_DEFAULT, &integerValue, 0, &length);
 
@@ -375,6 +516,7 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                         value = Local<Value>::New(NumberObject::New((double)integerValue));
                     }
                     break;
+				case SQL_CHAR:
                 case SQL_VARCHAR:
                     statusCode = SQLGetData(hstmt, column, SQL_C_CHAR, stringValue, sizeof(stringValue), &length);
                     if (!SQL_SUCCEEDED(statusCode)) {
@@ -397,6 +539,82 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                         value = Local<Value>::New(String::New(stringValue));
                     }
                     break;
+				case SQL_TYPE_TIME:
+					statusCode = SQLGetData(hstmt,column,SQL_C_TYPE_TIME,(SQLPOINTER)&time,0,&length);
+					if (!SQL_SUCCEEDED(statusCode)) {
+                        fprintf(stderr,
+                                "%s:%d:%s():FIXME:handle status code: %d\n",
+                                __FILE__, __LINE__, __FUNCTION__,
+                                statusCode);
+                        return scope.Close(Undefined());
+                    }
+
+                    if (length == SQL_NULL_DATA) {
+                        value = Local<Value>::New(Null());
+                    } else if ((size_t)length > sizeof(time)) {
+                        fprintf(stderr,
+                                "%s:%d:%s():FIXME:increase buffer size to %u+1 bytes (from %lu bytes)\n",
+                                __FILE__, __LINE__, __FUNCTION__,
+                                length, sizeof(time));
+                        return scope.Close(Undefined());
+                    } else {
+						int cx = snprintf (stringTime,8,"%02d:%02d:%02d",time.hour,time.minute,time.second);
+						if(cx>8){
+							fprintf(stderr,
+                                "%s:%d:%s():FIXME:increase buffer size to %u+1 bytes (from %lu bytes)\n",
+                                __FILE__, __LINE__, __FUNCTION__,
+                                cx, 8);
+                        return scope.Close(Undefined());
+						}
+                        value = = Local<Value>::New(String::New(stringTime));
+                    }
+                    break;
+				case SQL_TYPE_TIMESTAMP:
+					statusCode = SQLGetData(hstmt,column,SQL_C_TYPE_TIMESTAMP,(SQLPOINTER)&datetime,0,&length);
+					if (!SQL_SUCCEEDED(statusCode)) {
+                        fprintf(stderr,
+                                "%s:%d:%s():FIXME:handle status code: %d\n",
+                                __FILE__, __LINE__, __FUNCTION__,
+                                statusCode);
+                        return scope.Close(Undefined());
+                    }
+
+                    if (length == SQL_NULL_DATA) {
+                        value = Local<Value>::New(Null());
+                    } else if ((size_t)length > sizeof(datetime)) {
+                        fprintf(stderr,
+                                "%s:%d:%s():FIXME:increase buffer size to %u+1 bytes (from %lu bytes)\n",
+                                __FILE__, __LINE__, __FUNCTION__,
+                                length, sizeof(date));
+                        return scope.Close(Undefined());
+                    } else {
+                        value = DB2TimestampToV8Date(&datetime);
+                    }
+                    break;
+				case SQL_TYPE_DATE:
+					statusCode = SQLGetData(hstmt,column,SQL_C_TYPE_DATE,(SQLPOINTER)&date,0,&length);
+					if (!SQL_SUCCEEDED(statusCode)) {
+                        fprintf(stderr,
+                                "%s:%d:%s():FIXME:handle status code: %d\n",
+                                __FILE__, __LINE__, __FUNCTION__,
+                                statusCode);
+                        return scope.Close(Undefined());
+                    }
+
+                    if (length == SQL_NULL_DATA) {
+                        value = Local<Value>::New(Null());
+                    } else if ((size_t)length > sizeof(date)) {
+                        fprintf(stderr,
+                                "%s:%d:%s():FIXME:increase buffer size to %u+1 bytes (from %lu bytes)\n",
+                                __FILE__, __LINE__, __FUNCTION__,
+                                length, sizeof(date));
+                        return scope.Close(Undefined());
+                    } else {
+                        value = DB2DateToV8Date(&date);
+                    }
+                    break;
+				case SQL_XML:
+				case SQL_BLOB:
                 case SQL_ARD_TYPE:
                     statusCode = SQLGetData(hstmt, column, SQL_C_BINARY, NULL, 0, &length);
                     if (!SQL_SUCCEEDED(statusCode)) {
@@ -409,7 +627,7 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                         value = Local<Value>::New(Null());
                     } else {
                         allocated = length + 1;
-                        data = (SQLCHAR*)malloc(allocated);
+                        SQLCHAR* data = (SQLCHAR*)malloc(allocated);
                         statusCode = SQLGetData(hstmt, column, SQL_C_BINARY, data, allocated, &length);
                         if (!SQL_SUCCEEDED(statusCode)) {
                             fprintf(stderr,
@@ -543,8 +761,13 @@ Handle<Value> Connection::New(const Arguments& args) {
 
 Handle<Value> Connection::Connect(const Arguments& args) {
     HandleScope scope;
-
-    Handle<Value> argv[args.Length()];
+#ifdef _MSC_VER
+//	Handle<Value>  argv = (Handle<Value>)_alloca(args.Length() * sizeof(Value));
+	Handle<Value> *	argv;
+#else
+   Handle<Value> argv[args.Length()];
+#endif
+	
     size_t  argc;
     for (argc = 0; argc < (size_t)args.Length(); argc++) {
         argv[argc] = args[argc];
