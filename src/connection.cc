@@ -358,10 +358,12 @@ Handle<Value> Connection::Execute (const Arguments& args) {
             };
             for (column = 1; column <= columnCount; column++) {
                 char         stringValue[128];
+				char		 stringTime[8];
                 int          integerValue = 0;
 				double			 dblValue = 0.0;
 				SQL_DATE_STRUCT  date;
 				SQL_TIMESTAMP_STRUCT datetime;
+                SQL_TIME_STRUCT time;
                 SQLINTEGER       length = 0;
                 Local<Value> value;
 				SQLINTEGER  lobLoc ;
@@ -535,6 +537,36 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                         return scope.Close(Undefined());
                     } else {
                         value = Local<Value>::New(String::New(stringValue));
+                    }
+                    break;
+				case SQL_TYPE_TIME:
+					statusCode = SQLGetData(hstmt,column,SQL_C_TYPE_TIME,(SQLPOINTER)&time,0,&length);
+					if (!SQL_SUCCEEDED(statusCode)) {
+                        fprintf(stderr,
+                                "%s:%d:%s():FIXME:handle status code: %d\n",
+                                __FILE__, __LINE__, __FUNCTION__,
+                                statusCode);
+                        return scope.Close(Undefined());
+                    }
+
+                    if (length == SQL_NULL_DATA) {
+                        value = Local<Value>::New(Null());
+                    } else if ((size_t)length > sizeof(time)) {
+                        fprintf(stderr,
+                                "%s:%d:%s():FIXME:increase buffer size to %u+1 bytes (from %lu bytes)\n",
+                                __FILE__, __LINE__, __FUNCTION__,
+                                length, sizeof(time));
+                        return scope.Close(Undefined());
+                    } else {
+						int cx = snprintf (stringTime,8,"%02d:%02d:%02d",time.hour,time.minute,time.second);
+						if(cx>8){
+							fprintf(stderr,
+                                "%s:%d:%s():FIXME:increase buffer size to %u+1 bytes (from %lu bytes)\n",
+                                __FILE__, __LINE__, __FUNCTION__,
+                                cx, 8);
+                        return scope.Close(Undefined());
+						}
+                        value = = Local<Value>::New(String::New(stringTime));
                     }
                     break;
 				case SQL_TYPE_TIMESTAMP:
