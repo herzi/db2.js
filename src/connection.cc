@@ -5,6 +5,8 @@
 
 #include "buffer-helper.hh"
 #include "connection.hh"
+#include <cstring>
+#include <cstrings>
 
 using namespace v8;
 
