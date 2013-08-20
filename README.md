@@ -34,3 +34,7 @@ Testing
 -------
 
 The current test code depends on a database I have set up within my development vm. The code will be updated to use the sample database from DB2 later.
+
+Development
+-----------
+Requires gcc and g++, node-gyp, node.js.
