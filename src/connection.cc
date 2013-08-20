@@ -121,10 +121,10 @@ static char const* getSqlState (SQLSMALLINT  handleType,
     return (char const*)state;
 }
 
-Connection::Connection(char const* server) {
+Connection::Connection(char const* server, 
+                       char const* user = NULL, 
+                       char const* password = NULL) {
     SQLRETURN  statusCode;
-    uint8_t* password = NULL;
-    uint8_t* user = NULL;
 
     statusCode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &environment);
     if (!SQL_SUCCEEDED(statusCode)) {
@@ -152,7 +152,7 @@ Connection::Connection(char const* server) {
     // FIXME: check whether we want to use SQLSetConnectAttr();
 
     // FIXME: also implement this with: SQLDriverConnect(hdbc, (SQLHWND)NULL, "DSN=SAMPLE;UID=;PWD=;", NULL, 0, NULL, SQL_DRIVER_NOPROMPT);
-    statusCode = SQLConnect(connection, (SQLCHAR*)server, SQL_NTS, user, SQL_NTS, password, SQL_NTS);
+    statusCode = SQLConnect(connection, (SQLCHAR*)server, SQL_NTS, (SQLCHAR*)user, SQL_NTS, (SQLCHAR*)password, SQL_NTS);
 
     if (!SQL_SUCCEEDED(statusCode)) {
         ThrowException(getException(SQL_HANDLE_DBC, connection, statusCode, "SQLConnect()"));
@@ -529,14 +529,24 @@ void Connection::Init() {
 Handle<Value> Connection::New(const Arguments& args) {
     HandleScope scope;
 
-    if (args.Length() < 1) {
+    if (args.Length() != 1 && args.Length() != 3) {
         // FIXME: specify the number given and the number expected
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        ThrowException(Exception::TypeError(String::New("Wrong number of arguments.")));
         return scope.Close(Undefined());
     }
 
     String::Utf8Value server(args[0]->ToString());
-    Connection* obj = new Connection(*server);
+    
+    Local<String> tUser;
+    Local<String> tPassword;
+    if (args.Length() == 3) {
+        tUser = args[1]->ToString();
+        tPassword = args[2]->ToString();
+    }
+    String::Utf8Value user(tUser);
+    String::Utf8Value password(tPassword);
+    
+    Connection* obj = new Connection(*server, *user, *password);
     obj->Wrap(args.This());
 
     return args.This();
