@@ -157,11 +157,12 @@ Local<Date> DB2TimestampToV8Date(SQL_TIMESTAMP_STRUCT* d) {
 }
 
 
-Connection::Connection(char const* server) {
-    SQLRETURN  statusCode;
-    uint8_t* password = NULL;
-    uint8_t* user = NULL;
 
+Connection::Connection(char const* server, 
+                       char const* user = NULL, 
+                       char const* password = NULL) {
+    SQLRETURN  statusCode;
+   
     statusCode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &environment);
     if (!SQL_SUCCEEDED(statusCode)) {
         fprintf(stderr,
@@ -188,7 +189,7 @@ Connection::Connection(char const* server) {
     // FIXME: check whether we want to use SQLSetConnectAttr();
 
     // FIXME: also implement this with: SQLDriverConnect(hdbc, (SQLHWND)NULL, "DSN=SAMPLE;UID=;PWD=;", NULL, 0, NULL, SQL_DRIVER_NOPROMPT);
-    statusCode = SQLConnect(connection, (SQLCHAR*)server, SQL_NTS, user, SQL_NTS, password, SQL_NTS);
+    statusCode = SQLConnect(connection, (SQLCHAR*)server, SQL_NTS, (SQLCHAR*)user, SQL_NTS, (SQLCHAR*)password, SQL_NTS);
 
     if (!SQL_SUCCEEDED(statusCode)) {
         ThrowException(getException(SQL_HANDLE_DBC, connection, statusCode, "SQLConnect()"));
@@ -566,7 +567,7 @@ Handle<Value> Connection::Execute (const Arguments& args) {
                                 cx, 8);
                         return scope.Close(Undefined());
 						}
-                        value = = Local<Value>::New(String::New(stringTime));
+                        value = Local<Value>::New(String::New(stringTime));
                     }
                     break;
 				case SQL_TYPE_TIMESTAMP:
@@ -746,14 +747,23 @@ void Connection::Init() {
 Handle<Value> Connection::New(const Arguments& args) {
     HandleScope scope;
 
-    if (args.Length() < 1) {
+    if (args.Length() != 1 && args.Length() != 3) {
         // FIXME: specify the number given and the number expected
         ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
         return scope.Close(Undefined());
     }
 
     String::Utf8Value server(args[0]->ToString());
-    Connection* obj = new Connection(*server);
+    Local<String> tUser;
+    Local<String> tPassword;
+    if (args.Length() == 3) {
+        tUser = args[1]->ToString();
+        tPassword = args[2]->ToString();
+    }
+    String::Utf8Value user(tUser);
+    String::Utf8Value password(tPassword);
+    
+    Connection* obj = new Connection(*server, *user, *password);
     obj->Wrap(args.This());
 
     return args.This();

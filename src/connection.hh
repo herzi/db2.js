@@ -17,7 +17,9 @@ class Connection : public node::ObjectWrap {
         static v8::Handle<v8::Value> Connect(const v8::Arguments& args);
 
     private:
-        Connection(char const* server);
+        Connection(char const* server, 
+                       char const* user, 
+                       char const* password);
         ~Connection();
 
         SQLHANDLE  environment;
